@@ -8,7 +8,7 @@ import { useRef, type MouseEvent } from 'react';
 import { useGame, getGame } from '../gameStore.ts';
 import { useBoardMetrics } from '../hooks/useBoardMetrics.ts';
 import { pieceAt, pieceByUid, type Piece } from '../../engine/state.ts';
-import { getInteraction, setInteraction, finishChoice, act, toast } from '../interactionStore.ts';
+import { getInteraction, setInteraction, finishChoice, act, toast, useInteraction } from '../interactionStore.ts';
 import CellsGrid from './CellsGrid.tsx';
 import PiecesLayer from './PiecesLayer.tsx';
 import FxLayer, { type FxLayerHandle } from './FxLayer.tsx';
@@ -125,6 +125,7 @@ function handlePieceClick(p: Piece) {
 
 export default function BoardArea() {
   const loaded = useGame();
+  const ia = useInteraction();
   const boardRef = useRef<HTMLDivElement>(null);
   const fxRef = useRef<FxLayerHandle>(null);
   const m = useBoardMetrics(boardRef);
@@ -146,7 +147,7 @@ export default function BoardArea() {
     <section id="boardwrap">
       <div id="board-outer" onClick={handleBoardClick}>
         <CellsGrid game={game} boardRef={boardRef} />
-        <PiecesLayer st={game.state} m={m} />
+        <PiecesLayer st={game.state} ia={ia} m={m} />
         <FxLayer ref={fxRef} />
       </div>
     </section>

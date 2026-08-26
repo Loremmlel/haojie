@@ -1,0 +1,15 @@
+/* InspectPanel.module.css · 棋子详情面板（自 global.css #inspect 区段平移）
+ * #inspect 为全局 DOM id（e2e 锚点），module 内以 :global 寻址。 */
+:global(#inspect) {
+  font-size: .8rem;
+  min-height: 40px;
+}
+.iHead { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.iEmoji { font-size: 1.5rem; }
+.iName { font-weight: 800; font-size: .95rem; }
+.iOwner { font-size: .72rem; padding: 1px 7px; border-radius: 8px; font-weight: 700; }
+.o0 { background: rgba(56, 189, 248, .18); color: var(--p1); }
+.o1 { background: rgba(251, 113, 133, .18); color: var(--p2); }
+.iStats { display: flex; gap: 10px; margin: 5px 0; font-weight: 700; font-size: .74rem; color: var(--ink-dim); flex-wrap: wrap; }
+.iStats b { color: var(--ink); }
+.iDesc { color: var(--ink-dim); line-height: 1.55; font-size: .74rem; }

@@ -1,0 +1,20 @@
+/* SkillBox.module.css · 技能框（自 global.css #skillbox/.btn-skill/.btn-move 区段平移）
+ * #skillbox 为全局 DOM id（e2e 锚点），module 内以 :global 寻址。
+ * .btn-atk 为 v1 零引用死代码，随本批摘薄删除（先例：Piece.module.css 删 .neutral）。 */
+:global(#skillbox) { display: flex; gap: 7px; flex-wrap: wrap; }
+.btnSkill {
+  padding: 7px 13px; border-radius: 9px; font-weight: 800; font-size: .8rem;
+  border: 1px solid var(--purple); cursor: pointer;
+  background: linear-gradient(160deg, #6d28d9, #4c1d95); color: #ede9fe;
+  box-shadow: 0 3px 10px rgba(109, 40, 217, .4);
+  transition: transform .14s, filter .14s;
+}
+.btnSkill:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.2); }
+.btnSkill:disabled { opacity: .4; cursor: not-allowed; }
+.btnMove {
+  padding: 7px 13px; border-radius: 9px; font-weight: 800; font-size: .8rem; cursor: pointer;
+  border: 1px solid var(--line); transition: transform .14s, filter .14s;
+  background: linear-gradient(160deg, #1d4ed8, #1e3a8a); color: #dbeafe; border-color: #60a5fa;
+}
+.btnMove:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.2); }
+.btnMove:disabled { opacity: .4; cursor: not-allowed; }

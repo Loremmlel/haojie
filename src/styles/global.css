@@ -223,38 +223,8 @@ body.shake #board-outer { animation: shakeIt .38s; }
 }
 
 /* ─────────── 右侧面板（#panel/.panel-block/#phasehint/.card* 与 .mini-btn* 已分入
-   SidePanel/PhaseHint/Hand/Stored.module.css；#btns 与 .btn 基类仍留此处，评审 n6）─────────── */
-/* 详情面板 */
-#inspect { font-size: .8rem; min-height: 40px; }
-#inspect .i-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-#inspect .i-emoji { font-size: 1.5rem; }
-#inspect .i-name { font-weight: 800; font-size: .95rem; }
-#inspect .i-owner { font-size: .72rem; padding: 1px 7px; border-radius: 8px; font-weight: 700; }
-#inspect .i-owner.o0 { background: rgba(56,189,248,.18); color: var(--p1); }
-#inspect .i-owner.o1 { background: rgba(251,113,133,.18); color: var(--p2); }
-#inspect .i-stats { display: flex; gap: 10px; margin: 5px 0; font-weight: 700; font-size: .74rem; color: var(--ink-dim); flex-wrap: wrap; }
-#inspect .i-stats b { color: var(--ink); }
-#inspect .i-desc { color: var(--ink-dim); line-height: 1.55; font-size: .74rem; }
-
-#skillbox { display: flex; gap: 7px; flex-wrap: wrap; }
-.btn-skill {
-  padding: 7px 13px; border-radius: 9px; font-weight: 800; font-size: .8rem;
-  border: 1px solid var(--purple); cursor: pointer;
-  background: linear-gradient(160deg, #6d28d9, #4c1d95); color: #ede9fe;
-  box-shadow: 0 3px 10px rgba(109,40,217,.4);
-  transition: transform .14s, filter .14s;
-}
-.btn-skill:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.2); }
-.btn-skill:disabled { opacity: .4; cursor: not-allowed; }
-.btn-move, .btn-atk {
-  padding: 7px 13px; border-radius: 9px; font-weight: 800; font-size: .8rem; cursor: pointer;
-  border: 1px solid var(--line); transition: transform .14s, filter .14s;
-}
-.btn-move { background: linear-gradient(160deg, #1d4ed8, #1e3a8a); color: #dbeafe; border-color: #60a5fa; }
-.btn-atk { background: linear-gradient(160deg, #b91c1c, #7f1d1d); color: #fee2e2; border-color: #f87171; }
-.btn-move:hover:not(:disabled), .btn-atk:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.2); }
-.btn-move:disabled, .btn-atk:disabled { opacity: .4; cursor: not-allowed; }
-
+   SidePanel/PhaseHint/Hand/Stored.module.css；#inspect/#skillbox 已分入
+   InspectPanel/SkillBox.module.css；#btns 与 .btn 基类仍留此处，评审 n6）─────────── */
 #btns { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .btn {
   padding: 9px 4px; border-radius: 9px; font-weight: 800; font-size: .8rem;
