@@ -1,0 +1,2 @@
+/* Stored.module.css · 储存栏卡样式——与手牌卡同构，直接复用 Hand.module.css 的卡类
+ * （Stored.tsx 自 Hand.module.css 导入 .card/.spellCard/.c-*/.miniBtn*），本文件无私有类。 */

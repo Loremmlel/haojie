@@ -1,0 +1,40 @@
+/* Hand.module.css · 手牌卡（自 global.css .card* 与 .mini-btn* 区段平移）
+ * 储存栏卡与手牌卡同构，Stored 经 import 复用本文件类（见 Stored.module.css）。
+ * @keyframes cardBreath 仅本文件引用（selected/awaiting 的呼吸动画），不再留 global；
+ * 组件以 data-card 属性作 e2e 选择器，.card 哈希化后不可依赖类名寻址。 */
+.cardrow { display: flex; gap: 8px; flex-wrap: wrap; min-height: 30px; }
+
+.card {
+  position: relative; width: 128px;
+  background: linear-gradient(165deg, #232c50, #161c34);
+  border: 1px solid rgba(148,163,216,.3);
+  border-radius: 10px; padding: 7px 8px 8px;
+  cursor: pointer;
+  transition: transform .16s, box-shadow .16s, border-color .16s;
+}
+.card:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(0,0,0,.45); border-color: var(--gold); }
+.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(251,191,36,.5), 0 8px 18px rgba(0,0,0,.4); animation: cardBreath 1.4s ease-in-out infinite; }
+/* 部署阶段待处理的手牌：轻微呼吸，提示“先点我” */
+.awaiting { animation: cardBreath 1.6s ease-in-out infinite; }
+@keyframes cardBreath {
+  0%, 100% { box-shadow: 0 0 6px rgba(251,191,36,.25), 0 8px 18px rgba(0,0,0,.35); }
+  50% { box-shadow: 0 0 20px rgba(251,191,36,.75), 0 8px 18px rgba(0,0,0,.35); }
+}
+.spellCard { background: linear-gradient(165deg, #33254e, #1c1530); border-color: rgba(192,132,252,.4); }
+.disabled { opacity: .45; pointer-events: none; }
+.cHead { display: flex; align-items: center; gap: 6px; }
+.cEmoji { font-size: 1.25rem; filter: drop-shadow(0 0 5px rgba(255,255,255,.25)); }
+.cName { font-weight: 800; font-size: .86rem; }
+.cStats { display: flex; gap: 7px; margin: 4px 0 3px; font-size: .68rem; color: var(--ink-dim); font-weight: 700; }
+.cDesc { font-size: .68rem; color: var(--ink-dim); line-height: 1.45; max-height: 62px; overflow-y: auto; }
+.cLimit { position: absolute; top: -7px; right: -6px; font-size: .64rem; background: var(--purple); color: #180b2a; font-weight: 900; border-radius: 8px; padding: 1px 6px; }
+.cardBtns { display: flex; gap: 5px; margin-top: 6px; }
+.miniBtn {
+  flex: 1; padding: 3px 0; font-size: .7rem; font-weight: 700;
+  border-radius: 6px; border: 1px solid var(--line);
+  background: var(--bg-3); color: var(--ink); cursor: pointer;
+  transition: filter .15s;
+}
+.miniBtn:hover { filter: brightness(1.3); }
+.miniGold { background: linear-gradient(90deg, #92400e, #b45309); border-color: var(--gold); }
+.miniPurple { background: linear-gradient(90deg, #5b21b6, #7c3aed); border-color: var(--purple); }

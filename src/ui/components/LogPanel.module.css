@@ -1,0 +1,16 @@
+/* LogPanel.module.css · 战报日志（自 global.css #logwrap/#log 区段平移）
+ * #logwrap/#log 为全局 DOM id，样式以 :global 寻址；
+ * @keyframes logIn 仅被本文件局部类 .entry 引用，随 module 哈希化（对齐 ToastHost/Hand 约定）。
+ * .l-impt/.l-p1/.l-p2 日志色随本组件（cls 映射见 LogPanel.tsx）。 */
+:global(#logwrap) { flex: 1; min-height: 90px; display: flex; flex-direction: column; }
+:global(#log) {
+  flex: 1; overflow-y: auto; font-size: .72rem; line-height: 1.7; color: var(--ink-dim);
+  background: rgba(10,13,26,.5); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px;
+}
+:global(#log::-webkit-scrollbar) { width: 6px; }
+:global(#log::-webkit-scrollbar-thumb) { background: var(--bg-3); border-radius: 3px; }
+.entry { animation: logIn .25s; }
+.impt { color: var(--gold); font-weight: 700; }
+.p1 { color: var(--p1); }
+.p2 { color: var(--p2); }
+@keyframes logIn { from { opacity: 0; transform: translateX(8px); } }

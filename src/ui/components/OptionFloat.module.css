@@ -1,0 +1,28 @@
+/* OptionFloat.module.css · 选项浮层（自 global.css #optfloat/.of-* 区段平移）
+ * #optfloat 为全局 DOM id（评审 N4：e2e 经 #optfloat button 元素选择器寻址，不依赖类名）。
+ * @keyframes modalUp 在 global.css 亦留一份（#modal-card 跨 module 使用，见 TopBar 约定）。 */
+:global(#optfloat) {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 250; display: flex; flex-direction: column; gap: 9px;
+  min-width: 300px; max-width: 420px;
+  background: linear-gradient(170deg, #1c2340, #131830);
+  border: 1px solid rgba(192,132,252,.5); border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.7), 0 0 40px rgba(147,51,234,.2);
+  animation: modalUp .22s cubic-bezier(.2,.9,.3,1.15);
+}
+.title { font-size: .88rem; font-weight: 700; color: var(--ink-dim); margin-bottom: 4px; line-height: 1.6; }
+.btn {
+  padding: 10px 16px; border-radius: 10px; font-weight: 800; font-size: .9rem;
+  border: 1px solid var(--purple); cursor: pointer;
+  background: linear-gradient(160deg, #6d28d9, #4c1d95); color: #ede9fe;
+  transition: transform .13s, filter .13s;
+}
+.btn:hover { transform: translateX(4px); filter: brightness(1.25); }
+.cancel {
+  padding: 8px 16px; border-radius: 10px; font-weight: 700; font-size: .82rem;
+  border: 1px solid var(--line); background: transparent; color: var(--ink-faint);
+  cursor: pointer;
+}
+.cancel:hover { color: var(--danger); border-color: var(--danger); }
+@keyframes modalUp { from { transform: translateY(26px) scale(.97); opacity: 0; } }

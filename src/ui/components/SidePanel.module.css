@@ -1,0 +1,25 @@
+/* SidePanel.module.css · 右栏容器与面板通用块（自 global.css #panel/.panel-block 区段平移）
+ * #panel 为全局 DOM id（布局/e2e 锚点），module 内以 :global 寻址；
+ * 响应式 #panel 覆盖与 global.css 同值保留（保证 module 注入顺序下行为一致）。 */
+:global(#panel) {
+  flex: 1; min-width: 320px; max-width: 480px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+:global(#panel::-webkit-scrollbar) { width: 7px; }
+:global(#panel::-webkit-scrollbar-thumb) { background: var(--bg-3); border-radius: 4px; }
+@media (max-width: 1020px) {
+  :global(#panel) { max-width: 720px; width: 100%; }
+}
+
+.panelBlock {
+  background: rgba(22,28,52,.66);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+.blockTitle { font-size: .82rem; font-weight: 700; color: var(--ink-dim); margin-bottom: 6px; letter-spacing: 1px; }
+.blockSub { font-weight: 400; font-size: .72rem; color: var(--ink-faint); }
+.emptyHint { color: var(--ink-faint); font-size: .8rem; padding: 4px 2px; }
