@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createGame } from './engine/game.ts';
 import { setGame, useGame } from './ui/gameStore.ts';
+import { ask } from './ui/interactionStore.ts';
 import TopBar from './ui/components/TopBar.tsx';
 import BoardArea from './ui/components/BoardArea.tsx';
+import SidePanel from './ui/components/SidePanel.tsx';
 
 export default function App() {
   const [error, setError] = useState<string | null>(null);
@@ -13,8 +15,7 @@ export default function App() {
     (async () => {
       try {
         const g = await createGame((Math.random() * 0xffffffff) >>> 0, {
-          // 占位选择器：Task 6 Step 1 建成 interactionStore 后替换为真 ask
-          choose: async () => null,
+          choose: ask, // 引擎目标选择注入：ask 在 interactionStore 落地为「高亮 + 等待点击」
         });
         if (alive) setGame(g);
       } catch (e) { if (alive) setError(String(e)); }
@@ -30,7 +31,7 @@ export default function App() {
       <TopBar />
       <main id="layout">
         <BoardArea />
-        <aside id="panel">{/* SidePanel 于 Task 6 起填充；restart 经 props 下发 */}</aside>
+        <SidePanel restart={restart} />
       </main>
     </div>
   );

@@ -222,71 +222,8 @@ body.shake #board-outer { animation: shakeIt .38s; }
   100% { opacity: 0; transform: translateX(-50%) scaleX(1.05); }
 }
 
-/* ─────────── 右侧面板 ─────────── */
-#panel {
-  flex: 1; min-width: 320px; max-width: 480px;
-  display: flex; flex-direction: column; gap: 8px;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-#panel::-webkit-scrollbar { width: 7px; }
-#panel::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
-
-.panel-block {
-  background: rgba(22,28,52,.66);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 8px 10px;
-}
-.block-title { font-size: .82rem; font-weight: 700; color: var(--ink-dim); margin-bottom: 6px; letter-spacing: 1px; }
-.block-sub { font-weight: 400; font-size: .72rem; color: var(--ink-faint); }
-.empty-hint { color: var(--ink-faint); font-size: .8rem; padding: 4px 2px; }
-
-#phasehint {
-  padding: 7px 12px; border-radius: var(--radius);
-  background: linear-gradient(90deg, rgba(251,191,36,.14), transparent 70%);
-  border-left: 3px solid var(--gold);
-  font-size: .86rem; font-weight: 600;
-}
-
-.cardrow { display: flex; gap: 8px; flex-wrap: wrap; min-height: 30px; }
-
-.card {
-  position: relative; width: 128px;
-  background: linear-gradient(165deg, #232c50, #161c34);
-  border: 1px solid rgba(148,163,216,.3);
-  border-radius: 10px; padding: 7px 8px 8px;
-  cursor: pointer;
-  transition: transform .16s, box-shadow .16s, border-color .16s;
-}
-.card:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(0,0,0,.45); border-color: var(--gold); }
-.card.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(251,191,36,.5), 0 8px 18px rgba(0,0,0,.4); animation: cardBreath 1.4s ease-in-out infinite; }
-/* 部署阶段待处理的手牌：轻微呼吸，提示“先点我” */
-.card.awaiting { animation: cardBreath 1.6s ease-in-out infinite; }
-@keyframes cardBreath {
-  0%, 100% { box-shadow: 0 0 6px rgba(251,191,36,.25), 0 8px 18px rgba(0,0,0,.35); }
-  50% { box-shadow: 0 0 20px rgba(251,191,36,.75), 0 8px 18px rgba(0,0,0,.35); }
-}
-.card.spell-card { background: linear-gradient(165deg, #33254e, #1c1530); border-color: rgba(192,132,252,.4); }
-.card.disabled { opacity: .45; pointer-events: none; }
-.card .c-head { display: flex; align-items: center; gap: 6px; }
-.card .c-emoji { font-size: 1.25rem; filter: drop-shadow(0 0 5px rgba(255,255,255,.25)); }
-.card .c-name { font-weight: 800; font-size: .86rem; }
-.card .c-stats { display: flex; gap: 7px; margin: 4px 0 3px; font-size: .68rem; color: var(--ink-dim); font-weight: 700; }
-.card .c-desc { font-size: .68rem; color: var(--ink-dim); line-height: 1.45; max-height: 62px; overflow-y: auto; }
-.card .c-limit { position: absolute; top: -7px; right: -6px; font-size: .64rem; background: var(--purple); color: #180b2a; font-weight: 900; border-radius: 8px; padding: 1px 6px; }
-.card .card-btns { display: flex; gap: 5px; margin-top: 6px; }
-.mini-btn {
-  flex: 1; padding: 3px 0; font-size: .7rem; font-weight: 700;
-  border-radius: 6px; border: 1px solid var(--line);
-  background: var(--bg-3); color: var(--ink); cursor: pointer;
-  transition: filter .15s;
-}
-.mini-btn:hover { filter: brightness(1.3); }
-.mini-btn.gold { background: linear-gradient(90deg, #92400e, #b45309); border-color: var(--gold); }
-.mini-btn.purple { background: linear-gradient(90deg, #5b21b6, #7c3aed); border-color: var(--purple); }
-
+/* ─────────── 右侧面板（#panel/.panel-block/#phasehint/.card* 与 .mini-btn* 已分入
+   SidePanel/PhaseHint/Hand/Stored.module.css；#btns 与 .btn 基类仍留此处，评审 n6）─────────── */
 /* 详情面板 */
 #inspect { font-size: .8rem; min-height: 40px; }
 #inspect .i-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -445,31 +382,7 @@ body.shake #board-outer { animation: shakeIt .38s; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(14px) scale(.9); } }
 @keyframes toastOut { to { opacity: 0; transform: translateY(-8px); } }
 
-/* 选项浮层（部署冲锋 / 法术模式 / 强化选项等） */
-#optfloat {
-  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  z-index: 250; display: flex; flex-direction: column; gap: 9px;
-  min-width: 300px; max-width: 420px;
-  background: linear-gradient(170deg, #1c2340, #131830);
-  border: 1px solid rgba(192,132,252,.5); border-radius: 14px;
-  padding: 16px 18px;
-  box-shadow: 0 24px 70px rgba(0,0,0,.7), 0 0 40px rgba(147,51,234,.2);
-  animation: modalUp .22s cubic-bezier(.2,.9,.3,1.15);
-}
-#optfloat .of-title { font-size: .88rem; font-weight: 700; color: var(--ink-dim); margin-bottom: 4px; line-height: 1.6; }
-.of-btn {
-  padding: 10px 16px; border-radius: 10px; font-weight: 800; font-size: .9rem;
-  border: 1px solid var(--purple); cursor: pointer;
-  background: linear-gradient(160deg, #6d28d9, #4c1d95); color: #ede9fe;
-  transition: transform .13s, filter .13s;
-}
-.of-btn:hover { transform: translateX(4px); filter: brightness(1.25); }
-.of-cancel {
-  padding: 8px 16px; border-radius: 10px; font-weight: 700; font-size: .82rem;
-  border: 1px solid var(--line); background: transparent; color: var(--ink-faint);
-  cursor: pointer;
-}
-.of-cancel:hover { color: var(--danger); border-color: var(--danger); }
+/* 选项浮层已分入 OptionFloat.module.css（#optfloat 根元素 id 保留，评审 N4） */
 
 /* ─────────── 响应式 ─────────── */
 @media (max-width: 1020px) {

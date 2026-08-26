@@ -1,0 +1,8 @@
+/* PhaseHint.module.css · 阶段提示条（自 global.css #phasehint 区段平移）
+ * #phasehint 为全局 DOM id（e2e 锚点），样式挂 module 类（组件同时给 className）。 */
+.phaseHint {
+  padding: 7px 12px; border-radius: var(--radius);
+  background: linear-gradient(90deg, rgba(251,191,36,.14), transparent 70%);
+  border-left: 3px solid var(--gold);
+  font-size: .86rem; font-weight: 600;
+}
