@@ -42,51 +42,10 @@ body {
 
 #app { height: 100vh; display: flex; flex-direction: column; }
 
-/* ─────────── 顶栏 ─────────── */
-#topbar {
-  display: flex; align-items: center; gap: 14px;
-  padding: 8px 16px;
-  background: linear-gradient(180deg, rgba(20,26,48,.92), rgba(14,18,34,.85));
-  border-bottom: 1px solid var(--line);
-  box-shadow: 0 4px 22px rgba(0,0,0,.45);
-  z-index: 30;
-}
-.side { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
-.side-p2 { justify-content: flex-end; }
-.side-name { font-weight: 700; white-space: nowrap; letter-spacing: .5px; }
-.side-p1 .side-name { color: var(--p1); text-shadow: 0 0 14px rgba(56,189,248,.5); }
-.side-p2 .side-name { color: var(--p2); text-shadow: 0 0 14px rgba(251,113,133,.5); }
-
-.basebar {
-  position: relative; flex: 1; max-width: 340px; height: 22px;
-  background: #0d1120; border: 1px solid var(--line); border-radius: 999px;
-  overflow: hidden;
-}
-.basebar-fill {
-  position: absolute; inset: 0; width: 100%;
-  border-radius: 999px;
-  transition: width .5s cubic-bezier(.22,1,.36,1), background .4s;
-}
-.side-p1 .basebar-fill {
-  background: linear-gradient(90deg, #155e75, var(--p1));
-  box-shadow: 0 0 16px rgba(56,189,248,.45) inset;
-}
-.side-p2 .basebar-fill {
-  right: 0; left: auto;
-  background: linear-gradient(270deg, #9f1239, var(--p2));
-  box-shadow: 0 0 16px rgba(251,113,133,.45) inset;
-}
-.basebar-text {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-size: .78rem; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8);
-  letter-spacing: 1px;
-}
-.side.active .side-name::after { content: " ◈"; animation: blink 1.2s infinite; }
+/* ─────────── 共享 keyframes（被 module 类按名引用 / 跨 module 共享，一律留 global）─────────── */
 @keyframes blink { 50% { opacity: .35; } }
-
-#turnbox { text-align: center; min-width: 130px; }
-#turn-num { font-size: 1.02rem; font-weight: 900; letter-spacing: 2px; color: var(--gold); }
-#turn-owner { font-size: .82rem; color: var(--ink-dim); margin-top: 1px; }
+@keyframes shieldSpin { 50% { filter: brightness(1.35); } }
+@keyframes wobble { 50% { transform: rotate(-14deg); } }
 
 /* ─────────── 主布局 ─────────── */
 #layout {
@@ -124,9 +83,6 @@ body {
 .cell.base-cell { border-width: 2px; }
 .cell.base-cell.p1 { border-color: var(--p1); background: radial-gradient(circle, rgba(56,189,248,.28), rgba(56,189,248,.06)); }
 .cell.base-cell.p2 { border-color: var(--p2); background: radial-gradient(circle, rgba(251,113,133,.28), rgba(251,113,133,.06)); }
-.cell.base-cell.p1.deploy-glow { background: radial-gradient(circle, rgba(56,189,248,.5), rgba(56,189,248,.12)); }
-.cell.base-cell.p2.deploy-glow { background: radial-gradient(circle, rgba(251,113,133,.5), rgba(251,113,133,.12)); }
-.base-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell) * .5); filter: drop-shadow(0 0 6px currentColor); }
 
 /* 部署高亮 */
 .cell.dep-ok {
@@ -155,92 +111,7 @@ body {
 @keyframes healPulse { 50% { box-shadow: 0 0 12px rgba(52,211,153,.45); } }
 .cell.sel-hl { border-color: var(--gold); box-shadow: 0 0 14px rgba(251,191,36,.5); }
 
-/* 攻击路径阻挡提示 */
-.cell.blocked-dot::after {
-  content: ""; position: absolute; inset: 42%;
-  border-radius: 50%; background: rgba(248,113,113,.4);
-}
-
-/* ─────────── 棋子 ─────────── */
-.piece {
-  position: absolute;
-  left: 0; top: 0;
-  width: calc(var(--cell) - 6px); height: calc(var(--cell) - 6px);
-  margin: 3px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: calc(var(--cell) * .46);
-  z-index: 5;
-  cursor: pointer;
-  transition: left .32s cubic-bezier(.34,1.3,.5,1), top .32s cubic-bezier(.34,1.3,.5,1),
-              transform .18s, opacity .3s, filter .3s;
-  will-change: left, top;
-}
-.piece .face { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
-.piece.own0 .face {
-  background: radial-gradient(circle at 32% 28%, #7dd3fc, #0ea5e9 58%, #0c4a6e);
-  box-shadow: 0 3px 10px rgba(0,0,0,.5), 0 0 14px rgba(56,189,248,.4), inset 0 -3px 8px rgba(0,0,0,.35);
-  border: 2px solid #bae6fd;
-}
-.piece.own1 .face {
-  background: radial-gradient(circle at 32% 28%, #fda4af, #f43f5e 58%, #881337);
-  box-shadow: 0 3px 10px rgba(0,0,0,.5), 0 0 14px rgba(251,113,133,.4), inset 0 -3px 8px rgba(0,0,0,.35);
-  border: 2px solid #fecdd3;
-}
-.piece.neutral .face {
-  background: radial-gradient(circle at 32% 28%, #d4d4d8, #71717a 60%, #27272a);
-  border: 2px solid #e4e4e7; box-shadow: 0 3px 8px rgba(0,0,0,.5);
-}
-
-/* 数值角标 */
-.piece .stat {
-  position: absolute; z-index: 2;
-  font-size: calc(var(--cell) * .21); font-weight: 900; line-height: 1;
-  padding: 2px 4px; border-radius: 6px;
-  background: rgba(8,10,20,.82); border: 1px solid rgba(255,255,255,.18);
-  text-shadow: 0 1px 2px #000;
-}
-.piece .stat.atk { left: -4px; bottom: -3px; color: #fca5a5; }
-.piece .stat.hp  { right: -4px; bottom: -3px; color: #86efac; }
-.piece.hurt .stat.hp { color: var(--danger); }
-
-/* 状态徽标（右上小图标） */
-.piece .badges {
-  position: absolute; top: -8px; right: -8px; z-index: 3;
-  display: flex; gap: 1px; font-size: calc(var(--cell) * .2);
-  text-shadow: 0 0 4px #000;
-}
-/* 行动点 */
-.piece .apdots {
-  position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%); z-index: 3;
-  display: flex; gap: 2px;
-}
-.apdot { width: calc(var(--cell) * .11); height: calc(var(--cell) * .11); border-radius: 50%; background: var(--gold); box-shadow: 0 0 5px rgba(251,191,36,.8); }
-.apdot.spent { background: #3b4256; box-shadow: none; }
-
-/* 状态外观 */
-.piece.exhausted { filter: grayscale(.75) brightness(.62); }
-.piece.shielded .face { box-shadow: 0 0 0 3px rgba(103,232,249,.8), 0 0 22px rgba(103,232,249,.7) !important; animation: shieldSpin 2.4s linear infinite; }
-@keyframes shieldSpin { 50% { filter: brightness(1.35); } }
-.piece.marked::after {
-  content: "🎯"; position: absolute; top: -10px; left: -8px; font-size: calc(var(--cell)*.24);
-  animation: wobble 1s ease-in-out infinite;
-}
-@keyframes wobble { 50% { transform: rotate(-14deg); } }
-.piece.charged .face { box-shadow: 0 0 18px rgba(251,191,36,.75), 0 3px 10px rgba(0,0,0,.5) !important; }
-.piece.reapered::before {
-  content: "💀"; position: absolute; top: -10px; left: -8px; font-size: calc(var(--cell)*.24); z-index: 4;
-}
-.piece.charmed::before {
-  content: "🎭"; position: absolute; top: -10px; left: -8px; font-size: calc(var(--cell)*.24); z-index: 4;
-  animation: wobble 1.4s ease-in-out infinite;
-}
-.piece.buffed .stat.atk { color: var(--gold); text-shadow: 0 0 6px rgba(251,191,36,.9); }
-.piece.big5 { width: calc(var(--cell) * 2 - 6px); height: calc(var(--cell) * 2 - 6px); border-radius: 18%; }
-.piece.big5 .face { border-radius: 18%; font-size: calc(var(--cell) * .8); }
-.piece.selected { transform: scale(1.12); z-index: 8; }
-.piece.selected .face { box-shadow: 0 0 0 3px var(--gold), 0 0 20px rgba(251,191,36,.6) !important; }
-
+/* ─────────── 棋子 fx 命令式类（Global Constraints 第 2 条：留 global，Task 8 Step 5 复核）─────────── */
 /* 入场 / 死亡动画 */
 .piece.pop-in { animation: popIn .42s cubic-bezier(.34,1.56,.64,1); }
 @keyframes popIn { 0% { transform: scale(.15) translateY(-14px); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }

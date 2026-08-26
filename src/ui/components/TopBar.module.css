@@ -1,0 +1,48 @@
+/* TopBar.module.css · 顶栏样式（自 global.css 顶栏区段平移；DOM id 仍保留作 e2e 钩子）
+ * 注：@keyframes blink 在 global.css 亦留一份（跨 module 共享 keyframes 一律 global）；
+ * CSS Modules 会把本文件内的 keyframe 引用哈希化，故必须在本文件内同名再定义一份，
+ * 才能让 .side.active .sideName::after 的 animation 指向存在的 keyframes（编译后哈希名一致）。 */
+.topbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px 16px;
+  background: linear-gradient(180deg, rgba(20,26,48,.92), rgba(14,18,34,.85));
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 4px 22px rgba(0,0,0,.45);
+  z-index: 30;
+}
+.side { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sideP2 { justify-content: flex-end; }
+.sideName { font-weight: 700; white-space: nowrap; letter-spacing: .5px; }
+.sideP1 .sideName { color: var(--p1); text-shadow: 0 0 14px rgba(56,189,248,.5); }
+.sideP2 .sideName { color: var(--p2); text-shadow: 0 0 14px rgba(251,113,133,.5); }
+
+.basebar {
+  position: relative; flex: 1; max-width: 340px; height: 22px;
+  background: #0d1120; border: 1px solid var(--line); border-radius: 999px;
+  overflow: hidden;
+}
+.basebarFill {
+  position: absolute; inset: 0; width: 100%;
+  border-radius: 999px;
+  transition: width .5s cubic-bezier(.22,1,.36,1), background .4s;
+}
+.sideP1 .basebarFill {
+  background: linear-gradient(90deg, #155e75, var(--p1));
+  box-shadow: 0 0 16px rgba(56,189,248,.45) inset;
+}
+.sideP2 .basebarFill {
+  right: 0; left: auto;
+  background: linear-gradient(270deg, #9f1239, var(--p2));
+  box-shadow: 0 0 16px rgba(251,113,133,.45) inset;
+}
+.basebarText {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: .78rem; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8);
+  letter-spacing: 1px;
+}
+.side.active .sideName::after { content: " ◈"; animation: blink 1.2s infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+
+.turnbox { text-align: center; min-width: 130px; }
+.turnNum { font-size: 1.02rem; font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+.turnOwner { font-size: .82rem; color: var(--ink-dim); margin-top: 1px; }
