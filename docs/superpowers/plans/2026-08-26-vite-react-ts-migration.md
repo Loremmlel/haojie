@@ -1015,7 +1015,6 @@ App.tsx 的占位选择器（`async () => null`，见 Task 5 Step 3）替换为 
 - `ActionBar`：结束回合（`act(g=>g.endTurn())`）、悔棋（`g.undo()` 成功后 bump+toast）、图鉴/规则按钮（本任务先空回调，Task 9 接 modal）、重开（`confirm()` 确认后调用 App 下发的 **`restart` prop**——见 Task 5 Step 3 的 seq 重建通道；不用 location.reload）。按钮保留 v1 DOM id：`btn-end/btn-undo/btn-codex/btn-rules/btn-restart`（e2e 与快捷键依赖）。
 - `Hand` 卡片元素添加 `data-card` 属性；释放/储存/弃置按钮**保留 v1 data 属性** `data-cast/data-store/data-discard/data-cast-stored`（e2e 钩子，评审 N3：driver 清手牌依赖 `[data-store]`/`[data-discard]` 可寻址）；`Stored` 的释放按钮同样保留 `data-cast-stored`。
 - `OptionFloat`：浮层根元素**保留 `id="optfloat"`**（评审 N4），按钮经元素选择器 `#optfloat button` 即可被 e2e 寻址，不依赖类名；kind==='option' 时渲染 options 按钮 + cancelable 取消键，点击调 finishChoice。
-- `OptionFloat`：kind==='option' 时浮层渲染 options 按钮 + cancelable 取消键，点击调 finishChoice。
 
 - [ ] **Step 5: CSS 第二批摘薄**
 
@@ -1346,7 +1345,7 @@ const DRIVER = `
 </script>`;
 ```
 
-主流程：读 `dist/index.html` → 把 DRIVER 注入 `</body>` 前 → 写 `dist/_e2e.tmp.html` → `execFileSync(edge, ['--headless=new','--disable-gpu','--virtual-time-budget=60000','--dump-dom', pathToFileURL(tmp).href])` → 正则 `<div id="e2e-result">(.*?)</div>` 提取 JSON → 断言 `parsed.error === '' && parsed.deployed && parsed.advanced && parsed.selected && (parsed.attacked || parsed.moved)`，失败时打印完整 out 对象辅助定位 → finally 删临时文件 → 失败退出码 1。
+主流程：读 `dist/index.html` → 把 DRIVER 注入 `</body>` 前 → 写 `dist/_e2e.tmp.html` → `execFileSync(edge, ['--headless=new','--disable-gpu','--virtual-time-budget=60000','--dump-dom', pathToFileURL(tmp).href])` → 正则 `<div id="e2e-result">(.*?)</div>` 提取 JSON，**未匹配到时显式报错『e2e 结果缺失（预算耗尽或驱动异常）』并以退出码 1 结束**（评审 P3）→ 断言 `parsed.error === '' && parsed.deployed && parsed.advanced && parsed.selected && (parsed.attacked || parsed.moved)`，失败时打印完整 out 对象辅助定位 → finally 删临时文件 → 失败退出码 1。
 
 > 实施提示：若 headless 下动画时序导致偶发超时，优先调大 `--virtual-time-budget` 与各处等待上限，不得为绕过而改用直接调用 API 替代真实点击——本脚本的验收价值就在真实 DOM 链路。
 
@@ -1367,7 +1366,7 @@ Run: `grep -rn "from '.*src/js" src tests --include="*.ts*" || echo clean` → E
 Run: `npm run typecheck` → PASS
 Run: `npm test` → 全绿
 Run: `npm run build` → verify OK
-Run: `node tests/e2e/smoke.e2e.mjs` → deployed/selected/attacked 全 true
+Run: `node tests/e2e/smoke.e2e.mjs` → 断言通过（`error==='' && deployed && advanced && selected && (attacked || moved)`，与脚本内口径一致）
 浏览器双击 `dist/index.html` 完整打一局（人工，覆盖部署/行动/技能/法术/悔棋/胜负/再来一局）。
 
 - [ ] **Step 5: 对照规格 §6.4 豁免表复核**
