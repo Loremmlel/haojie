@@ -22,7 +22,7 @@
 - **选择器与类名可见性约定**（CSS Modules 哈希化的应对，e2e 与 FX 依赖此条）：
   1. 棋盘网格全家族**留 global.css**：`.cell` 及其全部状态类（`base-cell/dep-ok/mv-ok/atk-ok/sk-ok/heal-ok/sel-hl`）——它们是规格 §8 所指「棋盘网格基础布局」的一部分，且被 useBoardMetrics 与 e2e 直接按原始类名寻址；
   2. FX 命令式类**留 global.css**：`.piece.dying/.piece.hit-jolt/.piece.pop-in` 及其 keyframes（dieAnim/jolt/popIn）——fx.ts 以字符串硬编码挂类，哈希化即失效；
-  3. e2e 钩子优先用 **DOM id 与 data-\* 属性**：`#hand`、`#stored`、`#panel`、`#board`、`#btn-end`、`#btn-undo` 等 id 在 JSX 中原样保留；卡片加 `data-card` 属性、格子加既有 `dataset.x/y`、棋子沿用 `data-uid`；
+  3. e2e 钩子优先用 **DOM id 与 data-\* 属性**：`#hand`、`#stored`、`#panel`、`#board`、`#btn-end`、`#btn-undo` 等 id 在 JSX 中原样保留；`OptionFloat` 根元素保留 `id="optfloat"`；卡片加 `data-card` 属性，释放/储存/弃置按钮保留 v1 的 `data-cast/data-store/data-discard/data-cast-stored`，格子加既有 `dataset.x/y`、棋子沿用 `data-uid`；
   4. 其余组件私有类才走 `*.module.css`
 - **门禁强度说明**：Task 5–9 期间 `npm test` 只约束引擎回归、typecheck 只约束类型——UI 行为的正确性验收靠各任务的手测核对清单（已写入对应验证步骤）；首个自动化行为关卡是 Task 10 的 e2e，且其编写先于旧代码删除执行
 - win 遮罩唯一通道：FX 的 `onWin` 回调，引擎无第二通道
@@ -129,7 +129,7 @@ haojie/
 }
 ```
 
-注意：`scripts.test` 暂指向尚不存在的文件——本任务末尾创建占位空测试使其可执行。
+注意：`scripts.test` 暂指向尚不存在的文件——本任务末尾创建占位空测试使其可执行。另注：规格 §9 模板为 `tests/*.test.ts` 通配，此处钉死单文件 `tests/engine.test.ts`——现阶段二者等价（引擎测试单文件承载），将来拆分多测试文件时改回通配即可（评审 n5 差异已声明）。
 
 - [ ] **Step 2: 安装依赖**
 
@@ -520,8 +520,9 @@ export async function killPiece(s: Session, victim: Piece, killer: Piece | null)
 export async function flushDeaths(ctx: HandlerCtx, s: Session): Promise<void>;
 export function checkWin(st: GameState): void;
 /** 自 game.js 上移：攻击结算核心（死吧/掷骰/投石机挂标/射手记录/定炮清充能）。
- *  需要 ctx：内部经 flushDeaths 结算死亡遗言（奶妈遗言要 choose）。 */
-export async function performAttack(ctx: HandlerCtx, s: Session, p: Piece, target: Piece): Promise<boolean>;
+ *  需要 ctx：内部经 flushDeaths 结算死亡遗言（奶妈遗言要 choose）。
+ *  无返回值（v1 语义）；成功与否由 state 变化体现。 */
+export async function performAttack(ctx: HandlerCtx, s: Session, p: Piece, target: Piece): Promise<void>;
 /** 自 game.js 上移：底层落子 + 冲锋询问。需要 ctx：询问走 ctx.choose。
  *  spells.ts 的 summonOnce 与 game.ts 的 deployFollower 都调用它。 */
 export async function deployPiece(ctx: HandlerCtx, s: Session, owner: number,
@@ -582,6 +583,7 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game>;
 - `dealDamage/heal/killPiece` 首参 `s: Session`（内部用 `s.state` 替代原 `state`）
 - `flushDeaths` 增加 `ctx` 首参（奶妈遗言需要 choose）：`await fn(ctx, s, victim, killer)`
 - `checkWin` 纯查询保持 `(st)`
+- **上移入本文件**：`performAttack(ctx, s, p, target)` 与 `deployPiece(ctx, s, owner, defId, x, y)`（裁定 R7，签名见 Interfaces）——自 game.js 迁来；神行千里补刀、summonOnce 落子均调用它们
 - 文件头注释中的管线顺序注释**更正为代码实际顺序**：金身免疫 → 策反倒戈 → 厚脸皮正面减免 → 扣血 → 投石机标记引爆 → 名刀守护 → 死亡遗言入队 → 转化器反弹（评审 m2 已证实规格 v1 曾写反）
 
 - [ ] **Step 2: 实现 src/engine/abilities.ts 与 src/engine/spells.ts**
@@ -837,7 +839,7 @@ function PieceView({ p, st, m }: { p: Piece; st: GameState; m: Metrics }) {
   const pos = posOf(p.x, p.y, !!p.big, m);
   return (
     <div ref={refCb}
-         className={`${s.piece} own${p.owner}${p.big ? ` ${s.big5}` : ''}`}
+         className={`${s.piece} ${s[`own${p.owner}`]}${p.big ? ` ${s.big5}` : ''}`}
          data-uid={p.uid}
          style={{ left: pos.left, top: pos.top }}>
       <div className={s.face}>{def.emoji}</div>
@@ -901,7 +903,7 @@ export default function App() {
 - **移入 `TopBar.module.css`**：`#topbar/.side/.basebar*/.side-name/#turnbox/#turn-num/#turn-owner` 区段（style.css:46-89）；
 - **移入 `Piece.module.css` 仅结构类**：`.piece`/`.face`/`.stat`/`.badges`/`.apdots/.apdot*`/`.big5` 及 hurt/exhausted/shielded/marked/charged/reapered/charmed/buffed/selected 外观类（style.css:165-243）；
 - **留在 global.css 不动**：`:root` token、`#app/#layout/#boardwrap/#board-outer/#board/.cell` 网格全家族含全部高亮与基地类（style.css:92-163）、fx 命令式类 `.piece.pop-in/.piece.dying/.piece.hit-jolt` 及 keyframes popIn/dieAnim/jolt/shieldSpin/wobble/blink（style.css:222-258 中相应部分）；
-- **删除死代码**：`.neutral`（style.css:190 附近）、`.blocked-dot::after`（:159）、`.deploy-glow`（:127）——v1 全库零引用的孤儿类；
+- **删除死代码**：`.neutral`（style.css:190 附近）、`.blocked-dot::after`（:159）、`.deploy-glow`（:127）、`.base-icon`（:129）——v1 全库零引用的孤儿类；
 - keyframes 若被 module 类引用而 fx 也用，一律留 global（CSS Modules 对 keyframes 同样哈希化，跨文件共享必须 global）。
 
 - [ ] **Step 5: 验证**
@@ -1011,7 +1013,8 @@ App.tsx 的占位选择器（`async () => null`，见 Task 5 Step 3）替换为 
 - `Hand`：renderHand 平移为 JSX——卡片 selected/awaiting 态、spell 卡 ⏳limit 徽标、释放/储存按钮（法术）、弃置按钮（无处部署的随从）、卡片本体点击切 deployCard。法术释放走 `runSpellCast`（input.js:253-272 平移：busy→getSpec→ask→castHandSpell→playChain→bump）。
 - `Stored`：renderStored 平移（剩余期限徽标 + 释放按钮，同样走 runSpellCast）。
 - `ActionBar`：结束回合（`act(g=>g.endTurn())`）、悔棋（`g.undo()` 成功后 bump+toast）、图鉴/规则按钮（本任务先空回调，Task 9 接 modal）、重开（`confirm()` 确认后调用 App 下发的 **`restart` prop**——见 Task 5 Step 3 的 seq 重建通道；不用 location.reload）。按钮保留 v1 DOM id：`btn-end/btn-undo/btn-codex/btn-rules/btn-restart`（e2e 与快捷键依赖）。
-- `Hand` 卡片元素添加 `data-card` 属性（e2e 选择器钩子，见 Global Constraints 约定 3）。
+- `Hand` 卡片元素添加 `data-card` 属性；释放/储存/弃置按钮**保留 v1 data 属性** `data-cast/data-store/data-discard/data-cast-stored`（e2e 钩子，评审 N3：driver 清手牌依赖 `[data-store]`/`[data-discard]` 可寻址）；`Stored` 的释放按钮同样保留 `data-cast-stored`。
+- `OptionFloat`：浮层根元素**保留 `id="optfloat"`**（评审 N4），按钮经元素选择器 `#optfloat button` 即可被 e2e 寻址，不依赖类名；kind==='option' 时渲染 options 按钮 + cancelable 取消键，点击调 finishChoice。
 - `OptionFloat`：kind==='option' 时浮层渲染 options 按钮 + cancelable 取消键，点击调 finishChoice。
 
 - [ ] **Step 5: CSS 第二批摘薄**
@@ -1179,7 +1182,7 @@ git commit -m "feat(ui): FX 命令式内核平移——受控提交/死亡所有
 
 - [ ] **Step 2: WinMask**
 
-main.js showWinMask 平移：`{PNAME[winner]}获胜！` w1/w2 配色、副标题、「⟳ 再来一局」（**不 reload**：调用 Task 5 Step 3 的 **`restart` prop**——seq 重建通道，见 M4 裁定）、「🔍 复盘战场」（隐藏遮罩查看终局盘面）。由 Task 8 的 onWin 状态驱动显示。按钮复用 global.css 的 `.btn/.btn-primary` 基类。
+main.js showWinMask 平移：`{PNAME[winner]}获胜！` w1/w2 配色、副标题、「⟳ 再来一局」（**不 reload**：调用 Task 5 Step 3 的 **`restart` prop**——seq 重建通道，见 M4 裁定；**接入时回填 restart 定义为 `setWinner(null)` + `setGame(null)` + `setSeq(n=>n+1)`**——否则新局建成后旧胜利遮罩仍挂屏，评审 N5）、「🔍 复盘战场」（隐藏遮罩查看终局盘面）。由 Task 8 的 onWin 状态驱动显示。按钮复用 global.css 的 `.btn/.btn-primary` 基类。
 
 - [ ] **Step 3: LogPanel**
 
@@ -1220,7 +1223,7 @@ git commit -m "feat(ui): 外围组件——图鉴/规则书/胜利遮罩/战报/
 
 1. 读**新世界钩子形状** `window.__HJ_DEBUG__.game`（Task 5 已挂载，getter 恒指向当前局）；
 2. 选择器只用三类可寻址目标：global 类（`.cell.dep-ok/.atk-ok/.mv-ok`）、DOM id（`#hand/#btn-end/#optfloat`）、data-* 属性（`[data-card]/[data-store]/[data-discard]/.piece[data-uid]`）；
-3. 流程必须**跨回合**：首回合部署的棋子 `justDeployed=true` 不能行动，因此顺序为「清空手牌 → 点结束回合 → 等下一行动方有可动棋子 → 选子攻击/移动」。冲锋询问等 option 浮层出现时点首个 `.of-btn` 通过。
+3. 流程必须是**统一主循环**（复审二 N1/N2 教训）：boot 完成时的相位是 `deploy` 不是 `action`；且每次结束回合后**对方也会进入自己的 deploy 相位**——所以控制流为「`phase==='deploy'` → 清一张手牌；`phase==='action'` → 有可动棋子则选子行动，否则点结束回合」，循环直到完成一次真实行动。option 浮层（冲锋询问等）出现时点 `#optfloat button` 首个通过（元素选择器不受 CSS Modules 哈希影响）。
 
 ```js
 /** 发布前端到端冒烟：真实浏览器中完成 清手牌→跨回合→选子→攻击/移动 链路。 */
@@ -1262,74 +1265,81 @@ const DRIVER = `
   const st   = () => game() && game().state;
 
   (async () => {
-    if (!(await until(() => st() && st().phase === 'action', 20000))) throw new Error('开局超时');
+    // N1 修正：boot 完成时相位是 'deploy'（首回合手牌非空不推进），只等游戏就绪
+    if (!(await until(() => !!st(), 20000))) throw new Error('游戏未启动');
 
-    // ① 部署阶段：清空当前手牌（法术点储存；随从落 dep-ok 格；浮层点首项）
-    for (let i = 0; i < 40; i++) {
+    // deploy 相位处理一张手牌；返回是否取得进展
+    const drainOne = async () => {
       const s = st();
-      if (s.phase !== 'deploy') break;
-      if ($('#optfloat')) { click($('.of-btn')); await wait(200); continue; }
+      if ($('#optfloat')) { click($('#optfloat button')); return true; }  // 冲锋等询问浮层
       const before = s.hand[s.curPlayer].length;
       const storeBtn = $('[data-store]');
-      if (storeBtn) { click(storeBtn); }                 // 法术：储存无目标选择，必定成功
+      if (storeBtn) { click(storeBtn); }                  // 法术：储存无目标选择，必定成功
       else {
         const card = $('#hand [data-card]');
-        if (!card) break;
-        click(card);                                      // 进入部署模式
-        if (!(await until(() => $('.cell.dep-ok') || $('[data-discard]'), 3000))) break;
+        if (!card) throw new Error('deploy 相位但手牌区为空');
+        click(card);                                       // 进入部署模式
+        if (!(await until(() => $('.cell.dep-ok') || $('[data-discard]'), 3000)))
+          throw new Error('选卡后既无落点也无弃置钮');
         const cell = $('.cell.dep-ok');
         if (cell) { click(cell); out.deployed = true; }
-        else { click($('[data-discard]')); }              // 无处部署 → 弃置
+        else { click($('[data-discard]')); }               // 无处部署 → 弃置
       }
       if (!(await until(() => st().phase !== 'deploy' ||
           st().hand[st().curPlayer].length < before, 5000)))
         throw new Error('手牌处理卡死');
-    }
-    if (st().phase === 'deploy') throw new Error('部署阶段未走完');
+      return true;
+    };
 
-    // ② 结束回合 → 等任一方进入行动阶段且有「确定有动作可做」的棋子
-    click($('#btn-end'));
+    // 「存在确定有动作可做」的己方棋子（大肉比蓄势流程复杂，排除）
     const hasActor = () => {
-      const s = st(); if (!s || s.phase !== 'action') return false;
+      const s = st();
+      if (!s || s.phase !== 'action') return false;
       return s.pieces.some((p) => p.owner === s.curPlayer && !p.justDeployed &&
         p.apLeft > 0 && p.defId !== -1 && p.defId !== 5 &&
         (game().rules.attackTargets(p).length ||
          game().rules.moveTargets(p).some((c) => c.x !== p.x || c.y !== p.y)));
     };
-    for (let turnGuard = 0; turnGuard < 6 && !hasActor(); turnGuard++) {
-      await until(() => st().phase === 'action', 15000);
-      if (hasActor()) break;
-      click($('#btn-end'));                               // 该方无人可动 → 再过一回合
-    }
-    if (!hasActor()) throw new Error('连续多回合无可行动棋子');
-    out.advanced = true;
 
-    // ③ 选定一枚「能攻击或有位移」的棋子，点击之
-    const s = st();
-    let mine = null, plan = null;
-    for (const p of s.pieces.filter((q) => q.owner === s.curPlayer && !q.justDeployed &&
-                                       q.apLeft > 0 && q.defId !== -1 && q.defId !== 5)) {
-      if (game().rules.attackTargets(p).length) { mine = p; plan = 'attack'; break; }
-      if (!mine && game().rules.moveTargets(p).some((c) => c.x !== p.x || c.y !== p.y)) {
-        mine = p; plan = 'move';
+    // 统一主循环（N2 修正）：每个玩家的 deploy 相位都被清理；
+    // action 相位有戏则动、无戏则过回合——直到完成一次真实行动
+    let acted = false;
+    for (let guard = 0; guard < 24 && !acted; guard++) {
+      const s = st();
+      if (s.phase === 'over') throw new Error('对局意外提前结束');
+      if (s.phase === 'deploy') { await drainOne(); continue; }
+      if ($('#optfloat')) { click($('#optfloat button')); await wait(200); continue; }
+      if (!hasActor()) { click($('#btn-end')); await wait(500); continue; }
+      out.advanced = true;
+
+      // 选定一枚「能攻击或有位移」的棋子，点击之
+      let mine = null, plan = null;
+      for (const p of s.pieces.filter((q) => q.owner === s.curPlayer && !q.justDeployed &&
+                                         q.apLeft > 0 && q.defId !== -1 && q.defId !== 5)) {
+        if (game().rules.attackTargets(p).length) { mine = p; plan = 'attack'; break; }
+        if (!mine && game().rules.moveTargets(p).some((c) => c.x !== p.x || c.y !== p.y)) {
+          mine = p; plan = 'move';
+        }
       }
-    }
-    const el = $('.piece[data-uid="' + mine.uid + '"]');
-    if (!el) throw new Error('找不到棋子 DOM uid=' + mine.uid);
-    click(el);
-    out.selected = true;
-    if (!(await until(() => $('.atk-ok') || $('.mv-ok'), 5000))) throw new Error('选中后无高亮');
+      const el = $('.piece[data-uid="' + mine.uid + '"]');
+      if (!el) throw new Error('找不到棋子 DOM uid=' + mine.uid);
+      click(el);
+      out.selected = true;
+      if (!(await until(() => $('.atk-ok') || $('.mv-ok'), 5000))) throw new Error('选中后无高亮');
 
-    if (plan === 'attack') {
-      const tuid = game().rules.attackTargets(mine)[0].uid;
-      const tEl = $('.piece[data-uid="' + tuid + '"]');
-      if (tEl && $('.atk-ok')) { click(tEl); out.attacked = true; }
-      else { const mv = $('.mv-ok'); if (mv) { click(mv); out.moved = true; } }
-    } else {
-      click($('.mv-ok'));
-      out.moved = true;
+      if (plan === 'attack' && $('.atk-ok')) {
+        const tuid = game().rules.attackTargets(mine)[0].uid;
+        const tEl = $('.piece[data-uid="' + tuid + '"]');
+        if (tEl) { click(tEl); out.attacked = true; }
+        else { const mv = $('.mv-ok'); if (mv) { click(mv); out.moved = true; } }
+      } else {
+        const mv = $('.mv-ok');
+        if (mv) { click(mv); out.moved = true; }
+      }
+      acted = true;
+      await wait(2500);                                    // 等动画链与链尾提交
     }
-    await wait(2500);                                     // 等动画链与链尾提交
+    if (!acted) throw new Error('24 轮内未能完成任何行动');
     done();
   })().catch((e) => { out.error = String((e && e.message) || e); done(); });
 })();
@@ -1394,4 +1404,16 @@ git push origin main
 | M3 | Task 3 循环论断错误/清单漏项/types.ts 未登记 | 循环说明如实化；Interfaces 补两签名；types.ts 入 Files+目录树；计数更正 |
 | M4 | setGame(null) 不触发重建 | 裁定 R8：App seq 重建通道 + restart props 下发（Task 5/6/9 三处） |
 | M5 | clsx 未安装、PieceView 引用作用域外 game | 去 clsx 改模板串；GameState 经 props 下传 |
-| m1–m6, n1–n7 | 测试期望值/缺导入/API 替换表/bwin 属主/toast 回收/门禁说明/孤儿类等 | 全部按评审建议就地修复（Task 2/4/6/8/9 对应步骤及 Constraints） |
+| m1–m6, n1–n7 | 测试期望值/缺导入/API 替换表/bwin 属主/toast 回收/门禁说明/孤儿类等 | 按评审建议就地修复；其中 **n5 为已声明差异**而非修复：test script 维持单文件 `tests/engine.test.ts`，与规格通配模板的等价性已在 Task 1 Step 1 记录 |
+
+**第三轮复审**（对 commit 9627de2 修订版）——结论「批准但需小修」：21 条旧账 19 条妥善处置，新 DRIVER 存在两个死锁与两处钩子缺口。本轮全部处置：
+
+| 编号 | 问题 | 处置 |
+|---|---|---|
+| N1 | driver 开局等待 `phase==='action'` 永不满足（boot 完成时是 deploy） | 改为仅等游戏就绪，进入统一主循环 |
+| N2 | 只清一次手牌，对方回合 deploy 相位无人处理、endTurn 按钮禁用时空转 | 重写为统一主循环：deploy→drainOne / action→hasActor?行动:endTurn |
+| N3 | `[data-store]/[data-discard]` 被消费无生产 | Task 6 Step 4 明确按钮保留 v1 data 属性；约定 3 同步 |
+| N4 | `.of-btn` 被哈希化仍被原始名寻址 | OptionFloat 保留 `id="optfloat"`，driver 改点 `#optfloat button` 元素选择器 |
+| N5 | restart 未复位 winner 态 | Task 9 接入时回填 restart 定义为 setWinner(null)+setGame(null)+setSeq |
+| N6 | `own${p.owner}` 字面拼接 vs module 化 `.own0/.own1` | PieceView 改 `s[\`own${p.owner}\`]` 动态取用 |
+| N7–N10 | .base-icon 孤儿类 / Task 3 Step 1 上移清单断层 / performAttack 返回值语义 / n5 过度声明 | 分别补入 Task 5、Task 3、Interfaces、Self-Review 与 Task 1 |
