@@ -1,7 +1,7 @@
 # 「浩劫」迁移设计：Vite + React + TypeScript 单包重构
 
-- **日期**：2026-08-26（v2，同日修订）
-- **状态**：设计已与用户逐节确认；v2 依据独立架构评审修订（见附录 A）
+- **日期**：2026-08-26（v3，同日修订）
+- **状态**：设计已与用户逐节确认；v2 依据独立架构评审修订，v3 依据第二轮复核收尾（见附录 A）
 - **前置状态**：v1.0 静态版（commit `00bb878`），31 项冒烟测试全绿，仓库 `github.com/Loremmlel/haojie`（main）
 - **后续流程**：本规格经用户审阅后，由 superpowers:writing-plans 产出实施计划
 
@@ -105,8 +105,6 @@ export function createGame(seed: number, deps?: GameDeps): Game;
 interface GameDeps {
   /** 异步目标选择器（浏览器注入 UI ask；测试注入自动选择器） */
   choose?: Chooser;
-  /** FX/UI 回调接口（如胜利通知），见 §7.2 */
-  onEvent?: (ev: GameEvent) => void;
 }
 ```
 
@@ -118,10 +116,10 @@ interface GameDeps {
 
 ### 5.2 选择器注入的传递通道（评审 M3 的裁定）
 
-`ENV.choose` 在 v1.0 有 9 个调用点，全部位于 SKILLS / DEATHRATTLES / CAST 注册表 handler 内（钩拉落点、献祭选祭品与选列、神行落点与补刀、奶妈遗言反击、冲锋询问、重铸双召等），handler 现有签名 `(state, p, got)` 无法触达 createGame 闭包中的 chooser。裁定：
+`ENV.choose` 在 v1.0 有 9 个调用点，归属分两类：**7 处**位于 SKILLS / DEATHRATTLES / CAST 注册表 handler 内或经 `summonOnce`（CAST[25] 的辅助函数）间接调用（钩拉落点、献祭选祭品与选列、神行落点与补刀、奶妈遗言反击、重铸双召等），handler 现有签名 `(state, p, got)` 无法触达 createGame 闭包中的 chooser；**另 2 处**（冲锋询问在 `deployPiece` 流程内、技能询问在 API 动作函数 `useSkill` 内）本就在闭包流程中，迁移后天然直连 `deps.choose`，无需 ctx。裁定：
 
-- **ctx 首参方案**：所有注册表 handler 统一改为 `(ctx, state, …)` 签名，`ctx = { choose, emit? }` 由 createGame 组装后传入每次调用。约 20 个 handler 的机械改造，换来类型显式、注册表保持模块级纯函数、测试可注入假 ctx。
-- **明文禁止**：chooser、回调等任何函数值进入 GameState——快照 `JSON.stringify(state)` 会静默丢弃函数字段，导致 undo 后 chooser 凭空消失且逐字节校验照样通过的延后爆发故障。`ChooserSpec` 类型层面排除函数成员。
+- **ctx 首参方案**：全部注册表 handler 统一改为 `(ctx, state, …)` 签名，`ctx = { choose }` 由 createGame 组装后传入每次调用。约 20 个 handler 的机械改造，换来类型显式、注册表保持模块级纯函数、测试可注入假 ctx；中间辅助层（`flushDeaths` 向 DEATHRATTLES handler 透传、`summonOnce` 向其内部 choose 调用透传）同样显式携带 ctx。
+- **明文禁止**：chooser、回调等任何函数值进入 GameState——快照 `JSON.stringify(state)` 会静默丢弃函数字段，导致 undo 后 chooser 凭空消失且逐字节校验照样通过的延后爆发故障（类型层面的保障见 §5.4）。
 - **联机视角的诚实评估**：此注入点解决了「远端玩家的目标选择如何进入引擎」这一最难接缝之一；但命令协议、choose 网络往返的超时/取消语义、房间鉴权等属联机立项范围，本期不设计（§2.2）。
 
 ### 5.3 消灭隐藏全局耦合（评审 M3 附带发现）
@@ -133,7 +131,7 @@ interface GameDeps {
 
 ### 5.4 类型建模深度
 
-深度建模（已确认）：`GameState` / `Piece` 完整接口化；EV 事件流改判别联合（`{type:'damage';…} | {type:'death';…} | …`）；SKILLS / DEATHRATTLES / SPELL_TARGETS 注册表以类型约束键值对应。`ChoiceSpec` 泛型同时显式化两件事：`cancelable` 为 true 时返回类型含 `null`，不可取消的选择器返回非空——消除 v1.0 中 `summonOnce` 取 `spot.x` 前无空值保障一类隐患。目的：26 技能系统是全项目最易改崩处，让编译器承担回归防线。
+深度建模（已确认）：`GameState` / `Piece` 完整接口化；EV 事件流改判别联合（`{type:'damage';…} | {type:'death';…} | …`）；SKILLS / DEATHRATTLES / SPELL_TARGETS 注册表以类型约束键值对应。统一命名为 **`ChoiceSpec<T>`** 的泛型同时显式化三件事：`cancelable` 为 true 时返回类型含 `null`，不可取消的选择器返回非空（消除 v1.0 中 `summonOnce` 取 `spot.x` 前无空值保障一类隐患）；类型层面排除函数成员——与 §5.2「禁止函数入 GameState」形成静态保障。目的：26 技能系统是全项目最易改崩处，让编译器承担回归防线。
 
 ## 6. React 桥接：可变引擎 × 声明式渲染
 
@@ -154,14 +152,14 @@ engine 保持 mutation 风格不做 immutable 化。桥接层为极小外部 sto
 1. 组件读取游戏状态一律经 `useGame()`（getSnapshot 返回 version 号，version 变即重渲染）；
 2. **禁止**以 piece / state 对象作为 `React.memo` 的 props 比较依据或 `useMemo` / effect deps 的身份依据；需要子组件性能优化时以 uid、原始值字段为 deps；
 3. choice 的 `{ spec, resolve }` 存于 ref 而非依赖 state 稳定性；
-4. tearing 评估：busy 单飞锁保证同一时刻只有一条变异链，且 version 在链完全结束后才 bump——并发渲染不会观察到中间态，无需额外并发约束（此论断写入规格供实施时复核）。
+4. tearing 评估：busy 单飞锁保证同一时刻只有一条变异链，引擎变异仅发生在锁内的 fn() 阶段（choose 只在 fn 阶段暂停引擎）；播放期与 §6.2 同步点的任何 bump 均处于引擎静默窗口，观察到的都是一致状态，无需额外并发约束（此论断写入规格供实施时复核）。
 
 ### 6.2 播放期内受控提交策略（评审 M1 的裁定）
 
 v1.0 的 FX 在动画链中段存在 5 类命令式刷新（death 删节点、deploy 物化节点、turn 刷面板、charm 翻阵营色、attack 刷行动点），「全程冻结渲染」会造成死棋子挺过整条事件链等可见回归。裁定如下：
 
 - **默认链尾单次提交**：一条操作产生的整条 EV 链播完后 bump 一次，数值/样式级中途刷新（行动点、血条数字、阵营色）不再逐事件执行，其延迟到链尾的差异逐条记录为**有意变更**（§6.4）；
-- **deploy 结构同步点**：EV 的 `deploy` 类事件声明 `syncAfter` 标记，播放到此类事件后插入一次受控 bump 并等待一帧——保证链式场景（如「跑得快阵亡 → 墓地生成」）中后继事件依赖的新节点及时物化。实现为 act 循环内的安全提交点（busy 锁仍在，无并发），不用 flushSync；
+- **deploy 结构同步点**：EV 的 `deploy` 类事件声明 `syncAfter` 标记，播放到此类事件后插入一次受控 bump 并等待一帧——保证链式场景（如「跑得快阵亡 → 墓地生成」）中后继事件依赖的新节点及时物化。实现为 act 循环内的安全提交点（busy 锁仍在，无并发），不用 flushSync；提交完成判定须确保 registry 已物化新节点（双 rAF 或等效调度手法，细节归实施计划）；
 - **死亡节点的删除权归 React**：fx 的 death 分支不再 `el.remove()`、不再手动 syncPieces——只播 dying 动画（480ms）；动画结束时节点仍在，链尾 bump 后 React 按终态卸载该 uid，视觉无跳变且不与 reconciliation 冲突；
 - **move 位移权威归属**：动画期内由 fx 经 registry 直写 left/top（CSS transition 立即生效）；React 渲染时以同一 posOf 公式输出终态 style，两者数值恒等故无跳变；禁止把位移留给 bump 后的 React 提交（否则 340ms 的等待白费、transition 延迟起播）。
 
@@ -175,12 +173,13 @@ v1.0 的 FX 在动画链中段存在 5 类命令式刷新（death 删节点、de
 
 | 现状行为 | 迁移后行为 | 差异 |
 |---|---|---|
-| attack 命中瞬间行动点角标即减 | 行动点在事件链尾统一刷新 | ≤数百 ms 的角标延迟 |
-| turn 横幅弹出瞬间右侧面板整体刷新 | 面板随链尾 bump 刷新 | 同上 |
-| charm 倒戈瞬间阵营配色翻转 | 配色随链尾 bump 翻转 | 同上（倒戈特效本身不受影响） |
+| attack 命中瞬间行动点角标即减 | 行动点在事件链尾统一刷新 | 通常数百 ms，长击杀链下可达 ~2s |
+| turn 横幅弹出瞬间右侧面板整体刷新 | 面板随链尾 bump 刷新 | 数百 ms 量级 |
+| charm 倒戈瞬间阵营配色翻转 | 配色随链尾 bump 翻转 | 数百 ms 量级（倒戈特效本身不受影响） |
 | death 后节点由 FX 立即移除 | dying 动画播完后由 React 卸载 | 无可见差异（时序所有权变更） |
+| death 后 FX 附带的全场棋子徽标/状态类即时刷新 | 随链尾 bump 统一刷新 | 数百 ms 徽标类延迟（同链尾规则兜底） |
 
-除上述四条外，一切玩家可感知行为不得变化；实施中发现新的差异点须补录本表并经确认。
+除上述各条外，一切玩家可感知行为不得变化；实施中发现新的差异点须补录本表并经确认。
 
 ### 6.5 调试钩子
 
@@ -201,7 +200,7 @@ v1.0 的 FX 在动画链中段存在 5 类命令式刷新（death 删节点、de
 | `UI.syncPieces` ×2 | **删除**：deploy 走同步点、death 删除权归 React（§6.2） |
 | `UI.syncStatFlash` ×1 | **删除**：链尾 bump 统一刷新 |
 | `UI.refreshAll` / `refreshTop()` | **删除**：链尾 bump 统一刷新；banner 由 FX 自治绘制 |
-| `showWinMask`（main.js） | `deps.onEvent` 回调：win 事件 → React 层挂 WinMask |
+| `showWinMask`（main.js） | **唯一属主**：initFx 注入 `onWin(winner)` 回调——FX 播放 win 横幅后调用之，React 层据此挂 WinMask；引擎侧无第二通道，防双挂载/丢失 |
 | `API.state()` ×3 | createGame 实例的只读快照访问器，经 initFx 注入 |
 | `#board-outer` / `#fxlayer` / `#banner` 三个 DOM 宿主 | FxLayer 组件渲染的宿主元素，initFx 时注入引用 |
 | `document.body` 抖屏类 | 原样保留（body 级 class 无冲突） |
@@ -298,7 +297,7 @@ scripts（package.json）：
 | 编号 | 问题 | 处置 |
 |---|---|---|
 | M1 | 「动画期间不渲染」与 5 类中途刷新冲突 | §6.2 受控提交策略 + §6.4 豁免清单 |
-| M2 | FX「仅换两处挂点」低估耦合面 | §7.2 完整挂点清单（14 项归属） |
+| M2 | FX「仅换两处挂点」低估耦合面 | §7.2 完整挂点归属清单（逐项给归属） |
 | M3 | chooser 触达不到注册表；函数入 state 陷阱；五处偷读全局 | §5.2 ctx 方案 + §5.3 改签名清单 |
 | M4 | memo 身份比较陷阱未识别 | §6.1 四条铁律 |
 | m1 | e2e 实为新建而非保留 | §2.1 / §10 更正 |
@@ -308,3 +307,16 @@ scripts（package.json）：
 | m5 | 联机预留表述夸大 | §2.2 / §5.2 / §13 降格 |
 | m6 | 施工第 1 步打断旧 scripts | §12 过渡期说明 |
 | n1–n5 | vite pin 可升 / strip-types flag 冗余 / pendingDeaths 残留 / ChoiceSpec 非空契约 / 外部指代 | §3 注明、§5.1 修复、§5.4 显式化、§9 改写 |
+
+**第二轮复核（v3）**：结论「批准但需小修」——15 条旧账全部实质处置；新增 6 条文面精度问题全部就地修复：
+
+| 编号 | 问题 | 处置 |
+|---|---|---|
+| N1 | §5.2 调用点归属误述（冲锋询问/useSkill 实为闭包流程直连）、漏 flushDeaths/summonOnce 透传链 | §5.2 更正为「7 处注册表（含间接）+ 2 处闭包直连」并补中间层透传 |
+| N2 | win 事件 onEvent/onWin 双通道歧义 | 删除 GameDeps.onEvent，onWin 为唯一属主 |
+| N3 | §6.1「链完全结束后才 bump」与 §6.2 同步点矛盾 | 改为「引擎静默窗口」论证 |
+| N4 | 附录计数失准 | 去除数字 |
+| N5 | ChooserSpec/ChoiceSpec 名称不一致 | 统一 `ChoiceSpec<T>` 并入 §5.4 |
+| N6 | 豁免量级乐观、第五类未单列 | §6.4 更正量级并补行 |
+
+复核性提示移交实施计划：deploy 同步点的提交完成判定须确保 registry 已物化新节点（双 rAF 或等效手法）。
