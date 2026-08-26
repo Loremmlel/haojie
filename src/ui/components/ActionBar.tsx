@@ -1,11 +1,14 @@
 /* ActionBar.tsx · 动作栏 #btns（v1 template.html 静态按钮 + ui.js renderBtns 禁用逻辑平移）
  * 按钮保留 v1 DOM id：btn-end/btn-undo/btn-codex/btn-rules/btn-restart（e2e 与快捷键依赖）。
  * .btn 基类留 global.css（ActionBar 与 WinMask 跨组件共用，评审 n6）。
- * 图鉴/规则按钮本任务为空回调（Task 9 接 modal）；重开经 App 下发的 restart prop（M4 seq 重建通道）。 */
+ * 图鉴/规则按钮经 onOpenModal 打开对应 tab（Task 9 接线）；重开经 App 下发的 restart prop（M4 seq 重建通道）。 */
 import { useGame, bumpVersion } from '../gameStore.ts';
 import { useInteraction, act, toast } from '../interactionStore.ts';
 
-export default function ActionBar({ restart }: { restart: () => void }) {
+export default function ActionBar({ restart, onOpenModal }: {
+  restart: () => void;
+  onOpenModal: (tab: 'codex' | 'rules') => void;
+}) {
   const loaded = useGame();
   const ia = useInteraction();
   if (!loaded) return null;
@@ -29,8 +32,8 @@ export default function ActionBar({ restart }: { restart: () => void }) {
       <button id="btn-undo" className="btn"
               disabled={ia.busy || !canUndo || st.winner != null}
               onClick={handleUndo}>↩ 悔棋</button>
-      <button id="btn-codex" className="btn" onClick={() => { /* Task 9 接图鉴 modal */ }}>📖 图鉴</button>
-      <button id="btn-rules" className="btn" onClick={() => { /* Task 9 接规则 modal */ }}>📐 规则</button>
+      <button id="btn-codex" className="btn" onClick={() => onOpenModal('codex')}>📖 图鉴</button>
+      <button id="btn-rules" className="btn" onClick={() => onOpenModal('rules')}>📐 规则</button>
       <button id="btn-restart" className="btn btn-danger" disabled={ia.busy}
               onClick={handleRestart}>⟳ 重开</button>
     </div>

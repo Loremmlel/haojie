@@ -46,6 +46,10 @@ body {
 @keyframes blink { 50% { opacity: .35; } }
 @keyframes shieldSpin { 50% { filter: brightness(1.35); } }
 @keyframes wobble { 50% { transform: rotate(-14deg); } }
+/* 模态框/胜利遮罩的入场与辉光：由各 module.css 的 :global 规则按名引用，不能哈希化，留 global */
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes modalUp { from { transform: translateY(26px) scale(.97); opacity: 0; } }
+@keyframes winGlow { from { transform: scale(1); } to { transform: scale(1.06); } }
 
 /* ─────────── 主布局 ─────────── */
 #layout {
@@ -222,9 +226,12 @@ body.shake #board-outer { animation: shakeIt .38s; }
   100% { opacity: 0; transform: translateX(-50%) scaleX(1.05); }
 }
 
-/* ─────────── 右侧面板（#panel/.panel-block/#phasehint/.card* 与 .mini-btn* 已分入
-   SidePanel/PhaseHint/Hand/Stored.module.css；#inspect/#skillbox 已分入
-   InspectPanel/SkillBox.module.css；#btns 与 .btn 基类仍留此处，评审 n6）─────────── */
+/* ─────────── 动作栏 ───────────
+   #btns 网格与 .btn/.btn-primary/.btn-danger 基类留 global：ActionBar 与 WinMask
+   跨组件共用（评审 n6）。右侧面板其余区段均已分入 module.css：#panel/.panel-block/
+   #phasehint/.card 系/#inspect/#skillbox → SidePanel/PhaseHint/Hand/Stored/InspectPanel/
+   SkillBox.module.css；#logwrap/#log 与 .l-impt/.l-p1/.l-p2 → LogPanel.module.css；
+   #modal 家族/.cx- 系/.rules-doc → CodexModal.module.css；#winmask → WinMask.module.css。 */
 #btns { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .btn {
   padding: 9px 4px; border-radius: 9px; font-weight: 800; font-size: .8rem;
@@ -237,104 +244,6 @@ body.shake #board-outer { animation: shakeIt .38s; }
 .btn-primary { background: linear-gradient(160deg, #047857, #065f46); border-color: #34d399; color: #d1fae5; box-shadow: 0 3px 12px rgba(16,185,129,.3); }
 .btn-danger { background: linear-gradient(160deg, #991b1b, #7f1d1d); border-color: #ef4444; color: #fee2e2; }
 
-#logwrap { flex: 1; min-height: 90px; display: flex; flex-direction: column; }
-#log {
-  flex: 1; overflow-y: auto; font-size: .72rem; line-height: 1.7; color: var(--ink-dim);
-  background: rgba(10,13,26,.5); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px;
-}
-#log::-webkit-scrollbar { width: 6px; }
-#log::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 3px; }
-#log .l-impt { color: var(--gold); font-weight: 700; }
-#log .l-p1 { color: var(--p1); }
-#log .l-p2 { color: var(--p2); }
-#log div { animation: logIn .25s; }
-@keyframes logIn { from { opacity: 0; transform: translateX(8px); } }
-
-/* ─────────── 模态框：图鉴 & 规则 ─────────── */
-#modal {
-  position: fixed; inset: 0; z-index: 100;
-  background: rgba(4,6,14,.78); backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
-  animation: fadeIn .2s;
-}
-#modal.hidden { display: none; }
-@keyframes fadeIn { from { opacity: 0; } }
-#modal-card {
-  width: min(1060px, 94vw); height: min(760px, 90vh);
-  background: linear-gradient(170deg, #171d36, #10142a);
-  border: 1px solid rgba(148,163,216,.3); border-radius: 18px;
-  box-shadow: 0 30px 90px rgba(0,0,0,.7);
-  display: flex; flex-direction: column; overflow: hidden;
-  animation: modalUp .28s cubic-bezier(.2,.9,.3,1.1);
-}
-@keyframes modalUp { from { transform: translateY(26px) scale(.97); opacity: 0; } }
-#modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 8px; }
-#modal-title { font-size: 1.2rem; font-weight: 900; letter-spacing: 3px; color: var(--gold); }
-#modal-close {
-  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line);
-  background: var(--bg-2); color: var(--ink); font-size: 1rem; cursor: pointer;
-}
-#modal-close:hover { filter: brightness(1.4); }
-#modal-tabs { display: flex; gap: 8px; padding: 0 20px 10px; border-bottom: 1px solid var(--line); }
-.mtab {
-  padding: 7px 18px; border-radius: 9px 9px 0 0; font-weight: 800; font-size: .86rem;
-  background: transparent; color: var(--ink-dim); border: none; cursor: pointer;
-  border-bottom: 2px solid transparent;
-}
-.mtab.active { color: var(--gold); border-bottom-color: var(--gold); }
-#modal-body { flex: 1; overflow-y: auto; padding: 14px 20px 22px; }
-#modal-body::-webkit-scrollbar { width: 8px; }
-#modal-body::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
-
-.codex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
-.cx-card {
-  background: linear-gradient(165deg, #212a4c, #151a32);
-  border: 1px solid rgba(148,163,216,.22); border-radius: 12px; padding: 11px 12px;
-  transition: transform .16s, box-shadow .16s, border-color .16s;
-  cursor: default;
-}
-.cx-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.5); border-color: var(--gold); }
-.cx-card.spell { background: linear-gradient(165deg, #302350, #1a1430); border-color: rgba(192,132,252,.3); }
-.cx-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-.cx-idx {
-  font-size: .64rem; font-weight: 900; color: var(--bg-0);
-  background: var(--ink-dim); border-radius: 6px; padding: 1px 6px;
-}
-.cx-emoji { font-size: 1.5rem; filter: drop-shadow(0 0 6px rgba(255,255,255,.3)); }
-.cx-name { font-weight: 900; font-size: .98rem; }
-.cx-type { margin-left: auto; font-size: .64rem; font-weight: 800; padding: 2px 8px; border-radius: 8px; }
-.cx-type.follower { background: rgba(56,189,248,.16); color: var(--p1); }
-.cx-type.spell-t { background: rgba(192,132,252,.16); color: var(--purple); }
-.cx-stats { display: flex; gap: 9px; font-size: .72rem; font-weight: 800; color: var(--ink-dim); margin-bottom: 6px; flex-wrap: wrap; }
-.cx-stats b { color: var(--ink); }
-.cx-desc { font-size: .76rem; color: var(--ink-dim); line-height: 1.6; }
-
-.rules-doc { font-size: .86rem; line-height: 1.9; color: var(--ink-dim); max-width: 860px; }
-.rules-doc h3 { color: var(--gold); margin: 16px 0 6px; font-size: 1rem; letter-spacing: 1px; }
-.rules-doc h3:first-child { margin-top: 0; }
-.rules-doc b { color: var(--ink); }
-.rules-doc ul { padding-left: 20px; }
-.rules-doc li { margin: 3px 0; }
-.rules-doc .kbd {
-  background: var(--bg-3); border: 1px solid var(--line); border-radius: 5px;
-  padding: 0 6px; font-size: .78rem; color: var(--ink);
-}
-
-/* 胜利遮罩 */
-#winmask {
-  position: fixed; inset: 0; z-index: 200;
-  background: rgba(4,6,14,.82); backdrop-filter: blur(8px);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-  animation: fadeIn .5s;
-}
-#winmask.hidden { display: none; }
-#win-text { font-size: 3.2rem; font-weight: 900; letter-spacing: 14px; animation: winGlow 1.6s ease-in-out infinite alternate; }
-#win-text.w1 { color: var(--p1); text-shadow: 0 0 40px rgba(56,189,248,.9); }
-#win-text.w2 { color: var(--p2); text-shadow: 0 0 40px rgba(251,113,133,.9); }
-@keyframes winGlow { from { transform: scale(1); } to { transform: scale(1.06); } }
-#win-sub { color: var(--ink-dim); letter-spacing: 3px; }
-#winmask .btn { font-size: 1rem; padding: 12px 34px; }
-
 /* toast 提示已分入 ToastHost.module.css（#toast 根元素 id 保留，Task 8 第四批摘薄） */
 
 /* 选项浮层已分入 OptionFloat.module.css（#optfloat 根元素 id 保留，评审 N4） */
@@ -344,6 +253,6 @@ body.shake #board-outer { animation: shakeIt .38s; }
   body { overflow: auto; }
   #app { height: auto; }
   #layout { flex-direction: column; align-items: center; }
-  #panel { max-width: 720px; width: 100%; }
   :root { --cell: min(8.6vw, 52px); }
+  /* #panel 的窄屏覆盖已随 SidePanel.module.css（同值，保证 module 注入顺序下行为一致） */
 }

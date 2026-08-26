@@ -1,6 +1,7 @@
 /* SidePanel.tsx · 右侧面板装配（v1 template.html #panel 结构平移）
  * 块结构（.panel-block/.block-title）静态定义于此；PhaseHint/Hand/Stored/InspectPanel/
  * SkillBox 各渲染内容，#panel 布局样式在 SidePanel.module.css（:global(#panel)）。
+ * LogPanel 装于末位（v1 logwrap 紧随 #btns，flex:1 占余高）。
  * OptionFloat 为 position:fixed 浮层，随 choice 状态由自身渲染。 */
 import PhaseHint from './PhaseHint.tsx';
 import Hand from './Hand.tsx';
@@ -8,10 +9,14 @@ import Stored from './Stored.tsx';
 import InspectPanel from './InspectPanel.tsx';
 import SkillBox from './SkillBox.tsx';
 import ActionBar from './ActionBar.tsx';
+import LogPanel from './LogPanel.tsx';
 import OptionFloat from './OptionFloat.tsx';
 import s from './SidePanel.module.css';
 
-export default function SidePanel({ restart }: { restart: () => void }) {
+export default function SidePanel({ restart, onOpenModal }: {
+  restart: () => void;
+  onOpenModal: (tab: 'codex' | 'rules') => void;
+}) {
   return (
     <aside id="panel">
       <PhaseHint />
@@ -28,7 +33,8 @@ export default function SidePanel({ restart }: { restart: () => void }) {
         <InspectPanel />
       </section>
       <SkillBox />
-      <ActionBar restart={restart} />
+      <ActionBar restart={restart} onOpenModal={onOpenModal} />
+      <LogPanel />
       <OptionFloat />
     </aside>
   );
