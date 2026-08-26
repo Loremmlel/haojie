@@ -59,7 +59,10 @@ export default function App() {
       onWin,
       onSyncPoint: async () => {
         bumpVersion();
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        // 规格 §6.2「双 rAF 或等效调度手法」：headless（--virtual-time-budget）下嵌套
+        // requestAnimationFrame 可能永不触发（实测不稳定），改用双 setTimeout(0)——macrotask
+        // 必在 React 微任务提交（registry 物化新节点）之后执行，语义等价且环境无关。
+        await new Promise((r) => setTimeout(() => setTimeout(r, 0), 0));
       },
     });
   }, [hosts, onWin]);

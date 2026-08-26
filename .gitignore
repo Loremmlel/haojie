@@ -2,8 +2,8 @@
 node_modules/
 *.log
 
-# 端到端临时产物
-test/_e2e.html
+# 端到端临时产物（tests/e2e/smoke.e2e.mjs 注入驱动后的临时副本）
+dist/_e2e.tmp.html
 
 # 操作系统杂物
 .DS_Store
