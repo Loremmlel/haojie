@@ -335,22 +335,7 @@ body.shake #board-outer { animation: shakeIt .38s; }
 #win-sub { color: var(--ink-dim); letter-spacing: 3px; }
 #winmask .btn { font-size: 1rem; padding: 12px 34px; }
 
-/* toast 提示 */
-#toast {
-  position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%);
-  z-index: 300; pointer-events: none;
-  display: flex; flex-direction: column; gap: 6px; align-items: center;
-}
-.toast-item {
-  padding: 9px 20px; border-radius: 999px;
-  background: rgba(20,26,48,.94); border: 1px solid var(--gold);
-  color: var(--ink); font-size: .84rem; font-weight: 700;
-  box-shadow: 0 8px 26px rgba(0,0,0,.55);
-  animation: toastIn .25s cubic-bezier(.2,.9,.3,1.3), toastOut .4s ease-in 2.1s forwards;
-}
-.toast-item.warn { border-color: var(--danger); }
-@keyframes toastIn { from { opacity: 0; transform: translateY(14px) scale(.9); } }
-@keyframes toastOut { to { opacity: 0; transform: translateY(-8px); } }
+/* toast 提示已分入 ToastHost.module.css（#toast 根元素 id 保留，Task 8 第四批摘薄） */
 
 /* 选项浮层已分入 OptionFloat.module.css（#optfloat 根元素 id 保留，评审 N4） */
 

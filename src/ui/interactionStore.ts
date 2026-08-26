@@ -7,6 +7,8 @@ import type { Game } from '../engine/types.ts';
 import type { ChoiceSpec, ChoiceResult } from '../engine/state.ts';
 import { getGame, bumpVersion } from './gameStore.ts';
 import { playChain } from '../ui/fx/fx.ts';
+import { toast } from './toastBus.ts';
+export { toast };   // Task 8：占位回收——真实现移至 toastBus，此处 re-export 保持既有调用方（ActionBar/BoardArea）不变
 
 export interface ActiveChoice { spec: ChoiceSpec; resolve(r: ChoiceResult): void }
 export interface InteractionState {
@@ -39,11 +41,6 @@ export function finishChoice(v: ChoiceResult) {
 }
 export function resetSelection() {
   setInteraction({ mode: 'idle', cardIdx: null, selUid: null });
-}
-
-/** toast 占位：Task 8 接 ToastHost；warn=true 表示警告样式 */
-export function toast(msg: string, warn = false) {
-  console.warn(`[toast${warn ? ':warn' : ''}] ${msg}`);
 }
 
 export async function act(fn: (g: Game) => Promise<unknown>) {

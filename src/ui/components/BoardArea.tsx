@@ -4,7 +4,7 @@
  * 两条铁律：choice 分支先于 busy 检查（死锁防御 §6.3）；
  * 已选中己方棋子时点敌方＝攻击、点残血友方＝治疗（onPieceClick 攻击解析分支）。
  * #boardwrap/#board-outer 属 Global Constraints 第 1 条保留 global 的范围，本组件无 module 私有类。 */
-import { useRef, type MouseEvent } from 'react';
+import { useEffect, useRef, type MouseEvent } from 'react';
 import { useGame, getGame } from '../gameStore.ts';
 import { useBoardMetrics } from '../hooks/useBoardMetrics.ts';
 import { pieceAt, pieceByUid, type Piece } from '../../engine/state.ts';
@@ -12,6 +12,13 @@ import { getInteraction, setInteraction, finishChoice, act, toast, useInteractio
 import CellsGrid from './CellsGrid.tsx';
 import PiecesLayer from './PiecesLayer.tsx';
 import FxLayer, { type FxLayerHandle } from './FxLayer.tsx';
+
+/** 三个特效宿主元素（Task 8：挂载后上报 App，App useEffect 中 initFx 装配） */
+export interface FxHosts {
+  boardOuter: HTMLElement;
+  fxLayer: HTMLElement;
+  banner: HTMLElement;
+}
 
 /** 选择模式下解析格子点击（input.js tryResolveChoiceByCell 平移） */
 function tryResolveChoiceByCell(x: number, y: number): boolean {
@@ -123,12 +130,20 @@ function handlePieceClick(p: Piece) {
   }
 }
 
-export default function BoardArea() {
+export default function BoardArea({ onHosts }: { onHosts: (h: FxHosts) => void }) {
   const loaded = useGame();
   const ia = useInteraction();
   const boardRef = useRef<HTMLDivElement>(null);
   const fxRef = useRef<FxLayerHandle>(null);
   const m = useBoardMetrics(boardRef);
+  // 挂载（首局 loaded 后 DOM 就绪、ref 已填充）时上报三个宿主元素；onHosts 恒等稳定，仅触发一次
+  const ready = loaded != null;
+  useEffect(() => {
+    if (!ready) return;
+    const b = boardRef.current, f = fxRef.current;
+    if (!b || !f?.fxLayer || !f.banner) return;
+    onHosts({ boardOuter: b, fxLayer: f.fxLayer, banner: f.banner });
+  }, [ready, onHosts]);
   if (!loaded) return null;
   const game = loaded.game;
 
