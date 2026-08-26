@@ -1,0 +1,3413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>浩劫 · 双人对战棋</title>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   浩劫 · 样式表
+   暗色魔幻风；蓝方(P1)=青蓝，红方(P2)=玫红。
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* 主题 token（本作为深色设计，直接固定深色调） */
+  --bg-0: #0b0e17;
+  --bg-1: #111527;
+  --bg-2: #1a2038;
+  --bg-3: #232b4a;
+  --ink: #e8ecf8;
+  --ink-dim: #9aa3c0;
+  --ink-faint: #5d6580;
+  --p1: #38bdf8;          /* 蓝方主色 */
+  --p1-deep: #0c4a6e;
+  --p2: #fb7185;          /* 红方主色 */
+  --p2-deep: #881337;
+  --gold: #fbbf24;
+  --green: #34d399;
+  --purple: #c084fc;
+  --danger: #f87171;
+  --line: rgba(148, 163, 216, .16);
+  --cell: min(6.1vh, 6.4vw, 60px);
+  --radius: 10px;
+  font-size: 15px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; }
+body {
+  background:
+    radial-gradient(1100px 700px at 78% -10%, #1d2547 0%, transparent 55%),
+    radial-gradient(900px 600px at 12% 108%, #26152f 0%, transparent 55%),
+    var(--bg-0);
+  color: var(--ink);
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+#app { height: 100vh; display: flex; flex-direction: column; }
+
+/* ─────────── 顶栏 ─────────── */
+#topbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px 16px;
+  background: linear-gradient(180deg, rgba(20,26,48,.92), rgba(14,18,34,.85));
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 4px 22px rgba(0,0,0,.45);
+  z-index: 30;
+}
+.side { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.side-p2 { justify-content: flex-end; }
+.side-name { font-weight: 700; white-space: nowrap; letter-spacing: .5px; }
+.side-p1 .side-name { color: var(--p1); text-shadow: 0 0 14px rgba(56,189,248,.5); }
+.side-p2 .side-name { color: var(--p2); text-shadow: 0 0 14px rgba(251,113,133,.5); }
+
+.basebar {
+  position: relative; flex: 1; max-width: 340px; height: 22px;
+  background: #0d1120; border: 1px solid var(--line); border-radius: 999px;
+  overflow: hidden;
+}
+.basebar-fill {
+  position: absolute; inset: 0; width: 100%;
+  border-radius: 999px;
+  transition: width .5s cubic-bezier(.22,1,.36,1), background .4s;
+}
+.side-p1 .basebar-fill {
+  background: linear-gradient(90deg, #155e75, var(--p1));
+  box-shadow: 0 0 16px rgba(56,189,248,.45) inset;
+}
+.side-p2 .basebar-fill {
+  right: 0; left: auto;
+  background: linear-gradient(270deg, #9f1239, var(--p2));
+  box-shadow: 0 0 16px rgba(251,113,133,.45) inset;
+}
+.basebar-text {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: .78rem; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8);
+  letter-spacing: 1px;
+}
+.side.active .side-name::after { content: " ◈"; animation: blink 1.2s infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+
+#turnbox { text-align: center; min-width: 130px; }
+#turn-num { font-size: 1.02rem; font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+#turn-owner { font-size: .82rem; color: var(--ink-dim); margin-top: 1px; }
+
+/* ─────────── 主布局 ─────────── */
+#layout {
+  flex: 1; display: flex; gap: 14px;
+  padding: 10px 16px 14px;
+  min-height: 0;
+}
+#boardwrap { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+#board-outer { position: relative; }
+
+/* ─────────── 棋盘 ─────────── */
+#board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(9, var(--cell));
+  grid-template-rows: repeat(13, var(--cell));
+  gap: 3px;
+  padding: 10px;
+  background: linear-gradient(160deg, rgba(30,38,70,.72), rgba(16,20,40,.85));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.5), inset 0 0 60px rgba(64,84,160,.08);
+}
+
+.cell {
+  position: relative;
+  border-radius: 7px;
+  background: rgba(120,140,220,.07);
+  border: 1px solid rgba(148,163,216,.09);
+  transition: background .18s, box-shadow .18s, border-color .18s;
+}
+.cell:hover { background: rgba(140,160,240,.14); }
+
+/* 基地格 */
+.cell.base-cell { border-width: 2px; }
+.cell.base-cell.p1 { border-color: var(--p1); background: radial-gradient(circle, rgba(56,189,248,.28), rgba(56,189,248,.06)); }
+.cell.base-cell.p2 { border-color: var(--p2); background: radial-gradient(circle, rgba(251,113,133,.28), rgba(251,113,133,.06)); }
+.cell.base-cell.p1.deploy-glow { background: radial-gradient(circle, rgba(56,189,248,.5), rgba(56,189,248,.12)); }
+.cell.base-cell.p2.deploy-glow { background: radial-gradient(circle, rgba(251,113,133,.5), rgba(251,113,133,.12)); }
+.base-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell) * .5); filter: drop-shadow(0 0 6px currentColor); }
+
+/* 部署高亮 */
+.cell.dep-ok {
+  cursor: pointer;
+  background: rgba(94, 234, 152, .13);
+  border-color: rgba(94, 234, 152, .55);
+  animation: depPulse 1.6s ease-in-out infinite;
+}
+.cell.dep-ok:hover { background: rgba(94, 234, 152, .3); }
+@keyframes depPulse { 50% { box-shadow: 0 0 12px rgba(94,234,152,.35); } }
+
+/* 移动 / 攻击 / 技能目标高亮 */
+.cell.mv-ok {
+  cursor: pointer;
+  background: rgba(96, 165, 250, .18);
+  border-color: rgba(96, 165, 250, .65);
+  box-shadow: inset 0 0 14px rgba(96,165,250,.25);
+}
+.cell.mv-ok:hover { background: rgba(96, 165, 250, .36); }
+.cell.atk-ok { cursor: crosshair; border-color: rgba(248, 113, 113, .85); animation: atkPulse 1s ease-in-out infinite; }
+@keyframes atkPulse { 50% { box-shadow: 0 0 16px rgba(248,113,113,.55), inset 0 0 10px rgba(248,113,113,.3); } }
+.cell.sk-ok { cursor: pointer; border-color: rgba(192, 132, 252, .9); background: rgba(192, 132, 252, .16); animation: skPulse 1.1s ease-in-out infinite; }
+.cell.sk-ok:hover { background: rgba(192, 132, 252, .34); }
+@keyframes skPulse { 50% { box-shadow: 0 0 14px rgba(192,132,252,.5); } }
+.cell.heal-ok { cursor: pointer; border-color: rgba(52, 211, 153, .85); background: rgba(52, 211, 153, .14); animation: healPulse 1.2s ease-in-out infinite; }
+@keyframes healPulse { 50% { box-shadow: 0 0 12px rgba(52,211,153,.45); } }
+.cell.sel-hl { border-color: var(--gold); box-shadow: 0 0 14px rgba(251,191,36,.5); }
+
+/* 攻击路径阻挡提示 */
+.cell.blocked-dot::after {
+  content: ""; position: absolute; inset: 42%;
+  border-radius: 50%; background: rgba(248,113,113,.4);
+}
+
+/* ─────────── 棋子 ─────────── */
+.piece {
+  position: absolute;
+  left: 0; top: 0;
+  width: calc(var(--cell) - 6px); height: calc(var(--cell) - 6px);
+  margin: 3px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--cell) * .46);
+  z-index: 5;
+  cursor: pointer;
+  transition: left .32s cubic-bezier(.34,1.3,.5,1), top .32s cubic-bezier(.34,1.3,.5,1),
+              transform .18s, opacity .3s, filter .3s;
+  will-change: left, top;
+}
+.piece .face { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+.piece.own0 .face {
+  background: radial-gradient(circle at 32% 28%, #7dd3fc, #0ea5e9 58%, #0c4a6e);
+  box-shadow: 0 3px 10px rgba(0,0,0,.5), 0 0 14px rgba(56,189,248,.4), inset 0 -3px 8px rgba(0,0,0,.35);
+  border: 2px solid #bae6fd;
+}
+.piece.own1 .face {
+  background: radial-gradient(circle at 32% 28%, #fda4af, #f43f5e 58%, #881337);
+  box-shadow: 0 3px 10px rgba(0,0,0,.5), 0 0 14px rgba(251,113,133,.4), inset 0 -3px 8px rgba(0,0,0,.35);
+  border: 2px solid #fecdd3;
+}
+.piece.neutral .face {
+  background: radial-gradient(circle at 32% 28%, #d4d4d8, #71717a 60%, #27272a);
+  border: 2px solid #e4e4e7; box-shadow: 0 3px 8px rgba(0,0,0,.5);
+}
+
+/* 数值角标 */
+.piece .stat {
+  position: absolute; z-index: 2;
+  font-size: calc(var(--cell) * .21); font-weight: 900; line-height: 1;
+  padding: 2px 4px; border-radius: 6px;
+  background: rgba(8,10,20,.82); border: 1px solid rgba(255,255,255,.18);
+  text-shadow: 0 1px 2px #000;
+}
+.piece .stat.atk { left: -4px; bottom: -3px; color: #fca5a5; }
+.piece .stat.hp  { right: -4px; bottom: -3px; color: #86efac; }
+.piece.hurt .stat.hp { color: var(--danger); }
+
+/* 状态徽标（右上小图标） */
+.piece .badges {
+  position: absolute; top: -8px; right: -8px; z-index: 3;
+  display: flex; gap: 1px; font-size: calc(var(--cell) * .2);
+  text-shadow: 0 0 4px #000;
+}
+/* 行动点 */
+.piece .apdots {
+  position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%); z-index: 3;
+  display: flex; gap: 2px;
+}
+.apdot { width: calc(var(--cell) * .11); height: calc(var(--cell) * .11); border-radius: 50%; background: var(--gold); box-shadow: 0 0 5px rgba(251,191,36,.8); }
+.apdot.spent { background: #3b4256; box-shadow: none; }
+
+/* 状态外观 */
+.piece.exhausted { filter: grayscale(.75) brightness(.62); }
+.piece.shielded .face { box-shadow: 0 0 0 3px rgba(103,232,249,.8), 0 0 22px rgba(103,232,249,.7) !important; animation: shieldSpin 2.4s linear infinite; }
+@keyframes shieldSpin { 50% { filter: brightness(1.35); } }
+.piece.marked::after {
+  content: "🎯"; position: absolute; top: -10px; left: -8px; font-size: calc(var(--cell)*.24);
+  animation: wobble 1s ease-in-out infinite;
+}
+@keyframes wobble { 50% { transform: rotate(-14deg); } }
+.piece.charged .face { box-shadow: 0 0 18px rgba(251,191,36,.75), 0 3px 10px rgba(0,0,0,.5) !important; }
+.piece.reapered::before {
+  content: "💀"; position: absolute; top: -10px; left: -8px; font-size: calc(var(--cell)*.24); z-index: 4;
+}
+.piece.charmed::before {
+  content: "🎭"; position: absolute; top: -10px; left: -8px; font-size: calc(var(--cell)*.24); z-index: 4;
+  animation: wobble 1.4s ease-in-out infinite;
+}
+.piece.buffed .stat.atk { color: var(--gold); text-shadow: 0 0 6px rgba(251,191,36,.9); }
+.piece.big5 { width: calc(var(--cell) * 2 - 6px); height: calc(var(--cell) * 2 - 6px); border-radius: 18%; }
+.piece.big5 .face { border-radius: 18%; font-size: calc(var(--cell) * .8); }
+.piece.selected { transform: scale(1.12); z-index: 8; }
+.piece.selected .face { box-shadow: 0 0 0 3px var(--gold), 0 0 20px rgba(251,191,36,.6) !important; }
+
+/* 入场 / 死亡动画 */
+.piece.pop-in { animation: popIn .42s cubic-bezier(.34,1.56,.64,1); }
+@keyframes popIn { 0% { transform: scale(.15) translateY(-14px); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.piece.dying { animation: dieAnim .5s ease-in forwards; pointer-events: none; z-index: 20; }
+@keyframes dieAnim {
+  0% { transform: scale(1); filter: brightness(2); }
+  100% { transform: scale(.2) rotate(80deg); opacity: 0; filter: brightness(3) blur(2px); }
+}
+.piece.hit-jolt { animation: jolt .3s; }
+@keyframes jolt {
+  0%,100% { transform: translate(0,0); }
+  25% { transform: translate(-4px,2px) scale(.95); }
+  55% { transform: translate(4px,-2px) scale(.97); }
+}
+
+/* ─────────── 特效层 ─────────── */
+#fxlayer { position: absolute; inset: 0; pointer-events: none; z-index: 40; overflow: visible; }
+
+.fly-num {
+  position: absolute; z-index: 50; font-weight: 900; font-size: calc(var(--cell) * .34);
+  transform: translate(-50%, -50%);
+  animation: floatUp 1s cubic-bezier(.2,.7,.4,1) forwards;
+  text-shadow: 0 2px 6px rgba(0,0,0,.9), 0 0 10px currentColor;
+  white-space: nowrap;
+}
+.fly-num.dmg { color: #ff6b6b; }
+.fly-num.crit { color: #ffb703; font-size: calc(var(--cell) * .46); }
+.fly-num.heal { color: #4ade80; }
+.fly-num.buff { color: var(--purple); }
+@keyframes floatUp {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(.5); }
+  18% { opacity: 1; transform: translate(-50%, -60%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(1); }
+}
+
+.slash {
+  position: absolute; z-index: 49; height: 4px; border-radius: 4px;
+  background: linear-gradient(90deg, transparent, #fff 30%, var(--danger) 55%, transparent);
+  transform-origin: left center;
+  animation: slashGo .26s ease-out forwards;
+  filter: drop-shadow(0 0 8px rgba(255,80,80,.9));
+}
+@keyframes slashGo { 0% { transform: scaleX(0) rotate(var(--rot)); } 100% { transform: scaleX(1) rotate(var(--rot)); opacity: .1; } }
+
+.bolt {
+  position: absolute; z-index: 48; width: 14px; height: 14px; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 14px 4px currentColor;
+  background: radial-gradient(circle, #fff 20%, currentColor 60%);
+}
+.ring {
+  position: absolute; z-index: 47; border-radius: 50%;
+  border: 3px solid currentColor;
+  transform: translate(-50%, -50%);
+  animation: ringGrow .55s cubic-bezier(.2,.8,.3,1) forwards;
+}
+@keyframes ringGrow { 0% { width: 8px; height: 8px; opacity: 1; } 100% { width: calc(var(--ring-w)); height: calc(var(--ring-w)); opacity: 0; } }
+
+.boom {
+  position: absolute; z-index: 46; width: 12px; height: 12px; border-radius: 3px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  animation: boomFly .7s cubic-bezier(.15,.6,.4,1) forwards;
+}
+@keyframes boomFly {
+  0% { opacity: 1; transform: translate(-50%,-50%) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(300deg) scale(.3); }
+}
+
+.spell-cast {
+  position: absolute; z-index: 51; font-size: calc(var(--cell) * .8);
+  transform: translate(-50%, -50%);
+  animation: spellPop .8s cubic-bezier(.2,.9,.3,1.2) forwards;
+  filter: drop-shadow(0 0 12px rgba(192,132,252,.9));
+}
+@keyframes spellPop {
+  0% { transform: translate(-50%,-50%) scale(.2) rotate(-30deg); opacity: 0; }
+  35% { transform: translate(-50%,-50%) scale(1.3) rotate(6deg); opacity: 1; }
+  100% { transform: translate(-50%,-90%) scale(1); opacity: 0; }
+}
+
+body.shake #board-outer { animation: shakeIt .38s; }
+@keyframes shakeIt {
+  0%,100% { transform: translate(0,0); }
+  20% { transform: translate(-7px,4px); }
+  45% { transform: translate(6px,-5px); }
+  70% { transform: translate(-4px,2px); }
+}
+
+/* 回合横幅 */
+#banner {
+  position: absolute; left: 50%; top: 44%;
+  transform: translateX(-50%);
+  padding: 14px 46px;
+  font-size: 1.5rem; font-weight: 900; letter-spacing: 6px; white-space: nowrap;
+  background: linear-gradient(90deg, transparent, rgba(10,14,28,.92) 18% 82%, transparent);
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  z-index: 60;
+  animation: bannerSweep 1.15s cubic-bezier(.25,.8,.3,1) forwards;
+}
+#banner.b1 { color: var(--p1); text-shadow: 0 0 22px rgba(56,189,248,.9); }
+#banner.b2 { color: var(--p2); text-shadow: 0 0 22px rgba(251,113,133,.9); }
+#banner.bwin { color: var(--gold); text-shadow: 0 0 26px rgba(251,191,36,1); }
+#banner.hidden { display: none; }
+@keyframes bannerSweep {
+  0% { opacity: 0; transform: translateX(-50%) scaleX(.2); }
+  18% { opacity: 1; transform: translateX(-50%) scaleX(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) scaleX(1.05); }
+}
+
+/* ─────────── 右侧面板 ─────────── */
+#panel {
+  flex: 1; min-width: 320px; max-width: 480px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+#panel::-webkit-scrollbar { width: 7px; }
+#panel::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
+
+.panel-block {
+  background: rgba(22,28,52,.66);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+.block-title { font-size: .82rem; font-weight: 700; color: var(--ink-dim); margin-bottom: 6px; letter-spacing: 1px; }
+.block-sub { font-weight: 400; font-size: .72rem; color: var(--ink-faint); }
+.empty-hint { color: var(--ink-faint); font-size: .8rem; padding: 4px 2px; }
+
+#phasehint {
+  padding: 7px 12px; border-radius: var(--radius);
+  background: linear-gradient(90deg, rgba(251,191,36,.14), transparent 70%);
+  border-left: 3px solid var(--gold);
+  font-size: .86rem; font-weight: 600;
+}
+
+.cardrow { display: flex; gap: 8px; flex-wrap: wrap; min-height: 30px; }
+
+.card {
+  position: relative; width: 128px;
+  background: linear-gradient(165deg, #232c50, #161c34);
+  border: 1px solid rgba(148,163,216,.3);
+  border-radius: 10px; padding: 7px 8px 8px;
+  cursor: pointer;
+  transition: transform .16s, box-shadow .16s, border-color .16s;
+}
+.card:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(0,0,0,.45); border-color: var(--gold); }
+.card.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(251,191,36,.5), 0 8px 18px rgba(0,0,0,.4); animation: cardBreath 1.4s ease-in-out infinite; }
+/* 部署阶段待处理的手牌：轻微呼吸，提示“先点我” */
+.card.awaiting { animation: cardBreath 1.6s ease-in-out infinite; }
+@keyframes cardBreath {
+  0%, 100% { box-shadow: 0 0 6px rgba(251,191,36,.25), 0 8px 18px rgba(0,0,0,.35); }
+  50% { box-shadow: 0 0 20px rgba(251,191,36,.75), 0 8px 18px rgba(0,0,0,.35); }
+}
+.card.spell-card { background: linear-gradient(165deg, #33254e, #1c1530); border-color: rgba(192,132,252,.4); }
+.card.disabled { opacity: .45; pointer-events: none; }
+.card .c-head { display: flex; align-items: center; gap: 6px; }
+.card .c-emoji { font-size: 1.25rem; filter: drop-shadow(0 0 5px rgba(255,255,255,.25)); }
+.card .c-name { font-weight: 800; font-size: .86rem; }
+.card .c-stats { display: flex; gap: 7px; margin: 4px 0 3px; font-size: .68rem; color: var(--ink-dim); font-weight: 700; }
+.card .c-desc { font-size: .68rem; color: var(--ink-dim); line-height: 1.45; max-height: 62px; overflow-y: auto; }
+.card .c-limit { position: absolute; top: -7px; right: -6px; font-size: .64rem; background: var(--purple); color: #180b2a; font-weight: 900; border-radius: 8px; padding: 1px 6px; }
+.card .card-btns { display: flex; gap: 5px; margin-top: 6px; }
+.mini-btn {
+  flex: 1; padding: 3px 0; font-size: .7rem; font-weight: 700;
+  border-radius: 6px; border: 1px solid var(--line);
+  background: var(--bg-3); color: var(--ink); cursor: pointer;
+  transition: filter .15s;
+}
+.mini-btn:hover { filter: brightness(1.3); }
+.mini-btn.gold { background: linear-gradient(90deg, #92400e, #b45309); border-color: var(--gold); }
+.mini-btn.purple { background: linear-gradient(90deg, #5b21b6, #7c3aed); border-color: var(--purple); }
+
+/* 详情面板 */
+#inspect { font-size: .8rem; min-height: 40px; }
+#inspect .i-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+#inspect .i-emoji { font-size: 1.5rem; }
+#inspect .i-name { font-weight: 800; font-size: .95rem; }
+#inspect .i-owner { font-size: .72rem; padding: 1px 7px; border-radius: 8px; font-weight: 700; }
+#inspect .i-owner.o0 { background: rgba(56,189,248,.18); color: var(--p1); }
+#inspect .i-owner.o1 { background: rgba(251,113,133,.18); color: var(--p2); }
+#inspect .i-stats { display: flex; gap: 10px; margin: 5px 0; font-weight: 700; font-size: .74rem; color: var(--ink-dim); flex-wrap: wrap; }
+#inspect .i-stats b { color: var(--ink); }
+#inspect .i-desc { color: var(--ink-dim); line-height: 1.55; font-size: .74rem; }
+
+#skillbox { display: flex; gap: 7px; flex-wrap: wrap; }
+.btn-skill {
+  padding: 7px 13px; border-radius: 9px; font-weight: 800; font-size: .8rem;
+  border: 1px solid var(--purple); cursor: pointer;
+  background: linear-gradient(160deg, #6d28d9, #4c1d95); color: #ede9fe;
+  box-shadow: 0 3px 10px rgba(109,40,217,.4);
+  transition: transform .14s, filter .14s;
+}
+.btn-skill:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.2); }
+.btn-skill:disabled { opacity: .4; cursor: not-allowed; }
+.btn-move, .btn-atk {
+  padding: 7px 13px; border-radius: 9px; font-weight: 800; font-size: .8rem; cursor: pointer;
+  border: 1px solid var(--line); transition: transform .14s, filter .14s;
+}
+.btn-move { background: linear-gradient(160deg, #1d4ed8, #1e3a8a); color: #dbeafe; border-color: #60a5fa; }
+.btn-atk { background: linear-gradient(160deg, #b91c1c, #7f1d1d); color: #fee2e2; border-color: #f87171; }
+.btn-move:hover:not(:disabled), .btn-atk:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.2); }
+.btn-move:disabled, .btn-atk:disabled { opacity: .4; cursor: not-allowed; }
+
+#btns { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.btn {
+  padding: 9px 4px; border-radius: 9px; font-weight: 800; font-size: .8rem;
+  border: 1px solid var(--line); background: var(--bg-2); color: var(--ink);
+  cursor: pointer; transition: transform .14s, filter .14s, box-shadow .14s;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.25); }
+.btn:disabled { opacity: .38; cursor: not-allowed; }
+.btn-primary { background: linear-gradient(160deg, #047857, #065f46); border-color: #34d399; color: #d1fae5; box-shadow: 0 3px 12px rgba(16,185,129,.3); }
+.btn-danger { background: linear-gradient(160deg, #991b1b, #7f1d1d); border-color: #ef4444; color: #fee2e2; }
+
+#logwrap { flex: 1; min-height: 90px; display: flex; flex-direction: column; }
+#log {
+  flex: 1; overflow-y: auto; font-size: .72rem; line-height: 1.7; color: var(--ink-dim);
+  background: rgba(10,13,26,.5); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px;
+}
+#log::-webkit-scrollbar { width: 6px; }
+#log::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 3px; }
+#log .l-impt { color: var(--gold); font-weight: 700; }
+#log .l-p1 { color: var(--p1); }
+#log .l-p2 { color: var(--p2); }
+#log div { animation: logIn .25s; }
+@keyframes logIn { from { opacity: 0; transform: translateX(8px); } }
+
+/* ─────────── 模态框：图鉴 & 规则 ─────────── */
+#modal {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(4,6,14,.78); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn .2s;
+}
+#modal.hidden { display: none; }
+@keyframes fadeIn { from { opacity: 0; } }
+#modal-card {
+  width: min(1060px, 94vw); height: min(760px, 90vh);
+  background: linear-gradient(170deg, #171d36, #10142a);
+  border: 1px solid rgba(148,163,216,.3); border-radius: 18px;
+  box-shadow: 0 30px 90px rgba(0,0,0,.7);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: modalUp .28s cubic-bezier(.2,.9,.3,1.1);
+}
+@keyframes modalUp { from { transform: translateY(26px) scale(.97); opacity: 0; } }
+#modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 8px; }
+#modal-title { font-size: 1.2rem; font-weight: 900; letter-spacing: 3px; color: var(--gold); }
+#modal-close {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--bg-2); color: var(--ink); font-size: 1rem; cursor: pointer;
+}
+#modal-close:hover { filter: brightness(1.4); }
+#modal-tabs { display: flex; gap: 8px; padding: 0 20px 10px; border-bottom: 1px solid var(--line); }
+.mtab {
+  padding: 7px 18px; border-radius: 9px 9px 0 0; font-weight: 800; font-size: .86rem;
+  background: transparent; color: var(--ink-dim); border: none; cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.mtab.active { color: var(--gold); border-bottom-color: var(--gold); }
+#modal-body { flex: 1; overflow-y: auto; padding: 14px 20px 22px; }
+#modal-body::-webkit-scrollbar { width: 8px; }
+#modal-body::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
+
+.codex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.cx-card {
+  background: linear-gradient(165deg, #212a4c, #151a32);
+  border: 1px solid rgba(148,163,216,.22); border-radius: 12px; padding: 11px 12px;
+  transition: transform .16s, box-shadow .16s, border-color .16s;
+  cursor: default;
+}
+.cx-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.5); border-color: var(--gold); }
+.cx-card.spell { background: linear-gradient(165deg, #302350, #1a1430); border-color: rgba(192,132,252,.3); }
+.cx-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.cx-idx {
+  font-size: .64rem; font-weight: 900; color: var(--bg-0);
+  background: var(--ink-dim); border-radius: 6px; padding: 1px 6px;
+}
+.cx-emoji { font-size: 1.5rem; filter: drop-shadow(0 0 6px rgba(255,255,255,.3)); }
+.cx-name { font-weight: 900; font-size: .98rem; }
+.cx-type { margin-left: auto; font-size: .64rem; font-weight: 800; padding: 2px 8px; border-radius: 8px; }
+.cx-type.follower { background: rgba(56,189,248,.16); color: var(--p1); }
+.cx-type.spell-t { background: rgba(192,132,252,.16); color: var(--purple); }
+.cx-stats { display: flex; gap: 9px; font-size: .72rem; font-weight: 800; color: var(--ink-dim); margin-bottom: 6px; flex-wrap: wrap; }
+.cx-stats b { color: var(--ink); }
+.cx-desc { font-size: .76rem; color: var(--ink-dim); line-height: 1.6; }
+
+.rules-doc { font-size: .86rem; line-height: 1.9; color: var(--ink-dim); max-width: 860px; }
+.rules-doc h3 { color: var(--gold); margin: 16px 0 6px; font-size: 1rem; letter-spacing: 1px; }
+.rules-doc h3:first-child { margin-top: 0; }
+.rules-doc b { color: var(--ink); }
+.rules-doc ul { padding-left: 20px; }
+.rules-doc li { margin: 3px 0; }
+.rules-doc .kbd {
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: 5px;
+  padding: 0 6px; font-size: .78rem; color: var(--ink);
+}
+
+/* 胜利遮罩 */
+#winmask {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(4,6,14,.82); backdrop-filter: blur(8px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  animation: fadeIn .5s;
+}
+#winmask.hidden { display: none; }
+#win-text { font-size: 3.2rem; font-weight: 900; letter-spacing: 14px; animation: winGlow 1.6s ease-in-out infinite alternate; }
+#win-text.w1 { color: var(--p1); text-shadow: 0 0 40px rgba(56,189,248,.9); }
+#win-text.w2 { color: var(--p2); text-shadow: 0 0 40px rgba(251,113,133,.9); }
+@keyframes winGlow { from { transform: scale(1); } to { transform: scale(1.06); } }
+#win-sub { color: var(--ink-dim); letter-spacing: 3px; }
+#winmask .btn { font-size: 1rem; padding: 12px 34px; }
+
+/* toast 提示 */
+#toast {
+  position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%);
+  z-index: 300; pointer-events: none;
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
+}
+.toast-item {
+  padding: 9px 20px; border-radius: 999px;
+  background: rgba(20,26,48,.94); border: 1px solid var(--gold);
+  color: var(--ink); font-size: .84rem; font-weight: 700;
+  box-shadow: 0 8px 26px rgba(0,0,0,.55);
+  animation: toastIn .25s cubic-bezier(.2,.9,.3,1.3), toastOut .4s ease-in 2.1s forwards;
+}
+.toast-item.warn { border-color: var(--danger); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(14px) scale(.9); } }
+@keyframes toastOut { to { opacity: 0; transform: translateY(-8px); } }
+
+/* 选项浮层（部署冲锋 / 法术模式 / 强化选项等） */
+#optfloat {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 250; display: flex; flex-direction: column; gap: 9px;
+  min-width: 300px; max-width: 420px;
+  background: linear-gradient(170deg, #1c2340, #131830);
+  border: 1px solid rgba(192,132,252,.5); border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.7), 0 0 40px rgba(147,51,234,.2);
+  animation: modalUp .22s cubic-bezier(.2,.9,.3,1.15);
+}
+#optfloat .of-title { font-size: .88rem; font-weight: 700; color: var(--ink-dim); margin-bottom: 4px; line-height: 1.6; }
+.of-btn {
+  padding: 10px 16px; border-radius: 10px; font-weight: 800; font-size: .9rem;
+  border: 1px solid var(--purple); cursor: pointer;
+  background: linear-gradient(160deg, #6d28d9, #4c1d95); color: #ede9fe;
+  transition: transform .13s, filter .13s;
+}
+.of-btn:hover { transform: translateX(4px); filter: brightness(1.25); }
+.of-cancel {
+  padding: 8px 16px; border-radius: 10px; font-weight: 700; font-size: .82rem;
+  border: 1px solid var(--line); background: transparent; color: var(--ink-faint);
+  cursor: pointer;
+}
+.of-cancel:hover { color: var(--danger); border-color: var(--danger); }
+
+/* ─────────── 响应式 ─────────── */
+@media (max-width: 1020px) {
+  body { overflow: auto; }
+  #app { height: auto; }
+  #layout { flex-direction: column; align-items: center; }
+  #panel { max-width: 720px; width: 100%; }
+  :root { --cell: min(8.6vw, 52px); }
+}
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══ 顶部：双方基地血条与回合信息 ═══ -->
+  <header id="topbar">
+    <div class="side side-p1" id="side-p1">
+      <span class="side-name">❄ 蓝方（玩家一）</span>
+      <div class="basebar"><div class="basebar-fill" id="hp-p1"></div><span class="basebar-text" id="hp-p1-text"></span></div>
+    </div>
+    <div id="turnbox">
+      <div id="turn-num">回合 1</div>
+      <div id="turn-owner">—</div>
+    </div>
+    <div class="side side-p2" id="side-p2">
+      <div class="basebar"><div class="basebar-fill" id="hp-p2"></div><span class="basebar-text" id="hp-p2-text"></span></div>
+      <span class="side-name">红方（玩家二） 🔥</span>
+    </div>
+  </header>
+
+  <!-- ═══ 主区：棋盘 + 侧面板 ═══ -->
+  <main id="layout">
+    <section id="boardwrap">
+      <div id="board-outer">
+        <div id="board"></div>
+        <div id="fxlayer"></div>
+        <div id="banner" class="hidden"></div>
+      </div>
+    </section>
+
+    <aside id="panel">
+      <div id="phasehint">—</div>
+
+      <div class="panel-block" id="hand-block">
+        <div class="block-title">📜 本回合召唤 <span class="block-sub">随从必须部署 / 法术可释放或储存</span></div>
+        <div id="hand" class="cardrow"></div>
+      </div>
+
+      <div class="panel-block" id="stored-block">
+        <div class="block-title">🧪 法术储存栏 <span class="block-sub">点击释放，期限耗尽即销毁</span></div>
+        <div id="stored" class="cardrow"></div>
+      </div>
+
+      <div class="panel-block" id="inspect-block">
+        <div class="block-title">🔍 棋子详情 <span class="block-sub">点击场上棋子查看</span></div>
+        <div id="inspect"><div class="empty-hint">暂无选中棋子</div></div>
+      </div>
+
+      <div id="skillbox"></div>
+
+      <div id="btns">
+        <button id="btn-end" class="btn btn-primary">⏭ 结束回合</button>
+        <button id="btn-undo" class="btn">↩ 悔棋</button>
+        <button id="btn-codex" class="btn">📖 图鉴</button>
+        <button id="btn-rules" class="btn">📐 规则</button>
+        <button id="btn-restart" class="btn btn-danger">⟳ 重开</button>
+      </div>
+
+      <div id="logwrap">
+        <div class="block-title">🗒 战报</div>
+        <div id="log"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<!-- ═══ 图鉴 / 规则 模态框 ═══ -->
+<div id="modal" class="hidden">
+  <div id="modal-card">
+    <div id="modal-head">
+      <div id="modal-title">图鉴</div>
+      <button id="modal-close">✕</button>
+    </div>
+    <div id="modal-tabs">
+      <button data-tab="codex" class="mtab active">📖 棋子图鉴</button>
+      <button data-tab="rules" class="mtab">📐 游戏规则</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+"use strict";
+/* ═══════════════ rng.js · 可序列化种子随机数 ═══════════════
+ * mulberry32：状态就是一个 32 位整数，直接存在游戏状态里，
+ * 悔棋恢复快照后随机序列完全一致（确定性重放）。
+ * ═════════════════════════════════════════════════════════ */
+
+/** 推进并返回一个 [0,1) 随机数；state.seed 被原地更新。 */
+function rnd(state) {
+  let t = (state.seed = (state.seed + 0x6d2b79f5) | 0);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/** [lo, hi] 整数随机。 */
+function rndInt(state, lo, hi) {
+  return lo + Math.floor(rnd(state) * (hi - lo + 1));
+}
+
+/** 从数组均匀取一个元素。 */
+function rndPick(state, arr) {
+  return arr[Math.floor(rnd(state) * arr.length)];
+}
+
+
+/* ═══════════════ data.js · 棋子库定义 ═══════════════
+ * 数值五元组 = 攻击 / 血量 / 射程 / 一回合行动次数 / 一回合移动格数
+ * 距离一律使用曼哈顿距离 |Δx| + |Δy|。
+ * ════════════════════════════════════════════════════ */
+
+const W = 9;    // 列数 x ∈ [1,9]
+const H = 13;   // 行数 y ∈ [1,13]
+const BASE_HP = 300;
+
+const DEFS = [
+  {
+    id: 1, name: '冲锋怪', emoji: '⚔️', type: 'follower',
+    atk: 20, hp: 50, rng: 4, acts: 1, mv: 1,
+    short: '攻击伤害随机波动；可 -10 血换冲锋。',
+    desc: '攻击时判定：1/4 概率造成 40 伤害，1/12 概率造成 80 伤害，其余造成 20 伤害。部署时可选择 −10 血量以获得【冲锋】（可以在部署的当回合立即行动）。',
+  },
+  {
+    id: 2, name: '奶妈', emoji: '💉', type: 'follower',
+    atk: 20, hp: 30, rng: 2, acts: 1, mv: 1,
+    short: '可治疗友方；死亡时无视距离反击一次。',
+    desc: '攻击可以指定己方棋子：若如此，改为为其回复 20 血量（不超上限）。死亡时，可以进行一次无视距离的攻击（可指定场上任意敌方单位，含基地）。',
+  },
+  {
+    id: 3, name: '名刀', emoji: '🗡️', type: 'follower',
+    atk: 0, hp: 60, rng: 6, acts: 0, mv: 0,
+    short: '抽到时判定形态：守护灵 or 随人数变强的刀魂。',
+    desc: '抽到时判定：1/3 概率召唤成功（0/60/6/0/0，不能行动），它使射程 6 内友方棋子各自能避免一次致命伤害——以 1 血存活（每子限一次）；否则变为「刀魂」40n/25/n/1/1，n 为以其为中心 3×3 范围内随从的数量（含双方与自身，实时计算，攻击力与射程随 n 波动）。',
+  },
+  {
+    id: 4, name: '定炮', emoji: '🎯', type: 'follower',
+    atk: 100, hp: 40, rng: 4, acts: 1, mv: 1,
+    short: '不能直接攻击，蓄力两回合后轰出一发 100。',
+    desc: '不能直接攻击。行动可选【蓄力】或【开炮】：蓄力两回合（蓄力≥2）后可在后续回合进行一次 100 伤害的攻击，开炮清空蓄力。移动保留蓄力。蓄力满 5 格时该次开炮射程 +1。',
+  },
+  {
+    id: 5, name: '大肉比', emoji: '🐘', type: 'follower',
+    atk: 15, hp: 111, rng: 2, acts: 1, mv: 0,
+    short: '始终占据 2×2 四格；移动需先蓄势一回合。',
+    desc: '始终站四格（2×2 整体）。选择【移动】时第一次为蓄势（获得蓄力条，不移动）；有蓄力条时再选【移动】才可以整体平移一格，移动后蓄力条清零。（攻击范围从其覆盖四格中最近处计算。）',
+  },
+  {
+    id: 6, name: 'BUFF怪', emoji: '📣', type: 'follower',
+    atk: 20, hp: 20, rng: 4, acts: 1, mv: 1,
+    short: '技能：令射程内友方下回合 +10 攻击。',
+    desc: '技能（消耗一次行动）：使攻击范围内一名友方棋子在下个自己的回合获得 +10 攻击力。对 10 号投石机不生效。',
+  },
+  {
+    id: 7, name: '钩子', emoji: '🪝', type: 'follower',
+    atk: 30, hp: 55, rng: 3, acts: 1, mv: 1,
+    short: '技能：把射程内一名敌方棋子钩到自己身边。',
+    desc: '技能（消耗一次行动）：在攻击范围内选择一名敌方棋子，将其拉到钩子周围一圈的任意空格中（由你指定落点）。不能作用于基地。',
+  },
+  { id: 8, name: '爆弹', emoji: '💣', type: 'spell', limit: 4,
+    short: '对一个“田”字格（2×2）所有目标造成 20 伤害。',
+    desc: '法术：对一个“田”字格（2×2 区域）内的所有目标（棋子或基地）各造成 20 伤害。储存限制：4 回合。',
+  },
+  {
+    id: 9, name: '射手', emoji: '🏹', type: 'follower',
+    atk: 10, hp: 45, rng: 5, acts: 2, mv: 1,
+    short: '一回合两次攻击不可指定同一目标。',
+    desc: '一回合内如果选择两次攻击，则不能攻击同一目标。',
+  },
+  {
+    id: 10, name: '投石机', emoji: '🪨', type: 'follower',
+    atk: 0, hp: 20, rng: 100, acts: 2, mv: 1,
+    short: '全场投石挂标记，标记引爆时造成 5 伤害。',
+    desc: '攻击力 0、射程覆盖全场：命中者获得存在一回合的标记。标记在被标记者回满血、或再次被标记方的另一枚非投石机棋子命中时触发，造成 5 点伤害。不受 BUFF怪增益。',
+  },
+  {
+    id: 11, name: '白嫖怪', emoji: '🆓', type: 'follower',
+    atk: 20, hp: 20, rng: 4, acts: 1, mv: 1,
+    short: '死亡时，你下回合额外召唤一枚棋子。',
+    desc: '死亡时，其拥有者下个回合开始可以额外进行一次召唤（多抽并部署一张）。',
+  },
+  {
+    id: 12, name: '跑得快', emoji: '👟', type: 'follower',
+    atk: 5, hp: 1, rng: 6, acts: 2, mv: 2,
+    short: '贴脸被减速减攻速；死亡留下墓地阻挡。',
+    desc: '当距任意敌方棋子 1 格时，−1 移速、−1 攻速（行动次数）。死亡时在其位置生成一座 70 血量的墓地（视为 0/70/0/0/0 的己方单位，占格、可被摧毁）。',
+  },
+  {
+    id: 13, name: '直行侠', emoji: '➡️', type: 'follower',
+    atk: 25, hp: 35, rng: 4, acts: 1, mv: 3,
+    short: '每次移动必须直线冲整整三格。',
+    desc: '移动时必须直线移动三格（横向或纵向），中途不可转向、途经格必须全空。',
+  },
+  {
+    id: 14, name: '献祭炮', emoji: '🔥', type: 'follower',
+    atk: 0, hp: 30, rng: 3, acts: 1, mv: 1,
+    short: '献祭友方，向某一列的第一个敌人倾泻其攻击力。',
+    desc: '技能（消耗一次行动）：扣除自己 10 点血量上限，消灭射程内一名友方棋子（不含自身），然后对射程覆盖的任一列上距自己最近的敌方单位（含基地）造成等同于死亡友方攻击力的伤害。',
+  },
+  {
+    id: 15, name: '蓄力怪', emoji: '🔋', type: 'follower',
+    atk: 5, hp: 30, rng: 2, acts: 2, mv: 1,
+    short: '技能三选三：+10 攻 或 +1 射程，限三次。',
+    desc: '技能（消耗一次行动）：选择 +10 攻击力或 +1 攻击范围。该技能整场只能使用 3 次。',
+  },
+  {
+    id: 16, name: '伤害转化器', emoji: '🔄', type: 'follower',
+    atk: 5, hp: 100, rng: 2, acts: 1, mv: 1,
+    short: '可以被友方攻击；受友伤时反弹等量伤害给周围敌人。',
+    desc: '可以被友方棋子指定为攻击目标。每受到一次来自友方棋子的伤害，立即对攻击范围内所有敌方单位造成等量伤害（该反弹不会再触发其他转化器）。',
+  },
+  { id: 17, name: '金身', emoji: '🛡️', type: 'spell', limit: 100,
+    short: '友方免疫一切伤害直到你的下回合开始。',
+    desc: '法术：使一名友方棋子直到你的下回合开始不受任何伤害。储存限制：100 回合。',
+  },
+  { id: 18, name: '死吧！', emoji: '💀', type: 'spell', limit: 7,
+    short: '友方下回合命中的第一个敌方立即死亡。',
+    desc: '法术：使一名友方获得效果——在你的下个回合，它攻击命中的第一个敌方棋子立即死亡（金身可抵挡；对基地无效）。储存限制：7 回合。',
+  },
+  {
+    id: 19, name: '路障小法师', emoji: '🚧', type: 'follower',
+    atk: 20, hp: 30, rng: 4, acts: 1, mv: 1,
+    short: '技能：召唤一个只能活到你下回合的路障。',
+    desc: '技能（消耗一次行动）：在攻击范围内的空格生成一个己方单位 0/50/0/0/0，该单位会在你的下个回合开始时死亡。',
+  },
+  {
+    id: 20, name: '超级跑得快', emoji: '💥', type: 'follower',
+    atk: 20, hp: 20, rng: 2, acts: 2, mv: 2,
+    short: '被敌方击杀时反咬击杀者 20 伤害。',
+    desc: '若被敌方棋子击杀，则对击杀者造成 20 伤害。',
+  },
+  {
+    id: 21, name: '神行千里', emoji: '🌀', type: 'follower',
+    atk: 30, hp: 35, rng: 3, acts: 1, mv: 1,
+    short: '蓄气两回合后：扣 10 血瞬移六格并出手一次。',
+    desc: '行动可选【蓄气】或【神行】（蓄气≥2 可发动）：发动时扣自己 10 血，随后移动最多 6 格（落点任意可达空格），然后可以进行一次攻击。神行后蓄气清空。',
+  },
+  { id: 22, name: '策反', emoji: '🎭', type: 'spell', limit: 3,
+    short: '友方下回合首次受击时，收编攻击者！',
+    desc: '法术：使一名友方获得效果——到你的下回合开始前，第一次对其造成伤害的敌方棋子将变为你的友方棋子（本回合剩余行动作废）。储存限制：3 回合。',
+  },
+  {
+    id: 23, name: '独行侠', emoji: '🧍', type: 'follower',
+    atk: 5, hp: 30, rng: 5, acts: 6, mv: 1,
+    short: '两回合一动、爆发六次；周围一圈禁入友军。',
+    desc: '每隔一个自己的回合才能行动一次（行动回合拥有 6 次行动）。其周围一圈不可部署友方棋子，友方棋子也不能移动至其周围一格（敌方不受限）。',
+  },
+  {
+    id: 24, name: '厚脸皮', emoji: '🐢', type: 'follower',
+    atk: 10, hp: 50, rng: 4, acts: 1, mv: 1,
+    short: '正面来袭的伤害最多只有 10。',
+    desc: '受到来自正面的伤害时，该伤害最多为 10。（正面＝攻击路径朝向与其己方基地一致，即从前线方向打来；背后偷袭全额。）',
+  },
+  { id: 25, name: '重铸', emoji: '♻️', type: 'spell', limit: 7,
+    short: '召唤一次；或献祭两名过半血友方召唤两次。',
+    desc: '法术二选一：① 选择召唤一次（随机抽取一枚：随从立即部署，法术自动入库）；② 消灭两个血量不少于上限一半的友方棋子，召唤两次。储存限制：7 回合。',
+  },
+  {
+    id: 26, name: '杀手', emoji: '🔪', type: 'follower',
+    atk: 20, hp: 45, rng: 4, acts: 1, mv: 1,
+    short: '连续击杀循环升级：+血 →+攻 →+射程。',
+    desc: '每击杀一个敌方棋子按次序升级：① +10 血量并回复 10 血；② +5 攻击力；③ +1 攻击范围；④ +10 血量并回复 10 血……之后循环。',
+  },
+];
+
+/** 特殊单位定义（不在抽取库里） */
+const DEF_BASE = { id: -1, name: '基地', emoji: '🏰', type: 'base', atk: 0, hp: BASE_HP, rng: 0, acts: 0, mv: 0,
+  short: '核心建筑，300 血，被摧毁即告负。', desc: '双方的大本营，300 血量，血量归零的一方判负。占据 (5,1) 与 (5,13)。' };
+const DEF_GRAVE = { id: -2, name: '墓地', emoji: '⚰️', type: 'grave', atk: 0, hp: 70, rng: 0, acts: 0, mv: 0,
+  short: '跑得快的遗骸，0/70 的障碍物。', desc: '由跑得快死亡生成，视为 0/70/0/0/0 的己方单位：占格、阻挡、可被攻击摧毁。' };
+const DEF_BARRIER = { id: -3, name: '路障', emoji: '🚧', type: 'grave', atk: 0, hp: 50, rng: 0, acts: 0, mv: 0,
+  short: '路障小法师的杰作，撑不过下回合。', desc: '由路障小法师召唤的 0/50 己方单位：占格、阻挡，在你的下回合开始时消散。' };
+/** 名刀的“刀魂”形态 */
+const DEF_BLADE = { id: 33, name: '刀魂', emoji: '🌀', type: 'follower', atk: 0, hp: 25, rng: 1, acts: 1, mv: 1,
+  short: '名刀的另一种形态，随人潮而强。', desc: '攻击力 40n / 射程 n：n 为以其为中心 3×3 内随从数量（实时计算，含自身与双方）。' };
+
+function getDef(defId) {
+  if (defId === -1) return DEF_BASE;
+  if (defId === -2) return DEF_GRAVE;
+  if (defId === -3) return DEF_BARRIER;
+  if (defId === 33) return DEF_BLADE;
+  return DEFS.find((d) => d.id === defId);
+}
+
+
+/* ═══════════════ state.js · 游戏状态 / 快照悔棋 / 事件流 ═══════════════
+ * 逻辑层不触碰 DOM：
+ *   - 状态 S 是纯数据，可 JSON 序列化（悔棋 = 快照栈）
+ *   - 动画通过事件队列 EV 传递给表现层
+ *   - 需要玩家选择时通过 ENV.choose 异步注入（UI 或测试环境提供）
+ * ═════════════════════════════════════════════════════════════════════ */
+
+/** 表现层注入点：choose(spec) → Promise<target>；spec 形如
+ *  {kind:'cell', cells:[{x,y}], kind2:'piece'|'cell'|'option', ...} */
+const ENV = { choose: null };
+
+/** 当前对局 */
+let S = null;
+
+/** 事件队列：逻辑层同步写入，UI 层在操作完成后异步播放。不入快照。 */
+const EV = [];
+function ev(type, data) { EV.push(Object.assign({ type }, data)); }
+
+/** 悔棋快照栈（存序列化字符串，避免引用泄漏） */
+const UNDO_MAX = 600;
+let undoStack = [];
+
+function pushLog(state, msg, cls) {
+  state.log.push({ msg, cls: cls || '' });
+  if (state.log.length > 300) state.log.shift();
+}
+
+/** 创建棋子（纯数据） */
+function makePiece(state, owner, defId, x, y, hpOver) {
+  const def = getDef(defId);
+  const p = {
+    uid: ++state.uidSeq,
+    owner,
+    defId,
+    x, y,
+    hp: hpOver != null ? hpOver : def.hp,
+    maxHp: def.hp,
+    atk: def.atk,
+    range: def.rng,
+    mv: def.mv,
+    big: !!def.big || defId === 5,
+    justDeployed: true,
+    apLeft: 0,
+    charge: 0,
+    skillUses: 0,
+    killCount: 0,
+    guardUsed: false,
+    mark10: null,
+    shieldUntil: 0,
+    reaperFrom: 0, reaperTo: 0,
+    charmFrom: 0, charmTo: 0,
+    atkBuffs: [],
+    beatCount: 0,
+    diesAt: 0,
+    hitThisTurn: [],
+  };
+  return p;
+}
+
+/** 开新局。先手随机。 */
+function newGame(seed) {
+  undoStack = [];
+  EV.length = 0;
+  const st = {
+    seed: seed >>> 0 || 1234567,
+    turnCounter: 0,
+    curPlayer: -1,
+    phase: 'deploy',
+    winner: null,
+    pieces: [],
+    hand: [[], []],
+    stored: [[], []],
+    extraDraw: [0, 0],
+    extraRows: [[], []],
+    uidSeq: 1000,
+    log: [],
+  };
+  // 双方基地
+  st.pieces.push(makePiece(st, 0, -1, 5, 1));
+  st.pieces.push(makePiece(st, 1, -1, 5, H));
+  S = st;
+  pushLog(st, '⚔️ 「浩劫」开局！先手由天命决定……');
+  return st;
+}
+
+/* ─────────── 悔棋 ─────────── */
+
+/** 在一次玩家操作前调用：压入当前完整状态快照。 */
+function snap() {
+  undoStack.push(JSON.stringify(S));
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+}
+
+/** 撤销最近一次操作；无可撤时返回 false。 */
+function undo() {
+  if (!undoStack.length) return false;
+  S = JSON.parse(undoStack.pop());
+  EV.length = 0; // 丢弃半途事件，直接整体重绘
+  return true;
+}
+
+function canUndo() { return undoStack.length > 0 && !S.winner; }
+
+/* ─────────── 常用查询 ─────────── */
+
+function pieceAt(state, x, y) {
+  for (const p of state.pieces) {
+    if (p.dead) continue;
+    if (p.big) {
+      if (x >= p.x && x <= p.x + 1 && y >= p.y && y <= p.y + 1) return p;
+    } else if (p.x === x && p.y === y) return p;
+  }
+  return null;
+}
+
+function pieceByUid(state, uid) {
+  return state.pieces.find((p) => p.uid === uid && !p.dead) || null;
+}
+
+/** 有效攻击力（刀魂按周围人数实时计算，含临时增益） */
+function effAtk(p) {
+  const now = S.turnCounter;
+  let a = p.defId === 33 ? bladeN(p) * 40 : p.atk;
+  for (const b of p.atkBuffs) if (now < b.until) a += b.amt;
+  return a;
+}
+
+const PNAME = ['蓝方', '红方'];
+
+
+/* ═══════════════ rules.js · 几何与合法性判定 ═══════════════
+ * 所有“格数”均为曼哈顿距离 |Δx| + |Δy|。
+ * 攻击穿透规则：若到目标所有 ≤射程 的路径都被其他敌方棋子
+ * 封死，则无法攻击（BFS 判可达）。
+ * ═══════════════════════════════════════════════════════════ */
+
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+function inBoard(x, y) { return x >= 1 && x <= W && y >= 1 && y <= H; }
+function mdist(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
+
+/** 棋子占据的全部格子 */
+function pieceCells(p) {
+  if (!p.big) return [{ x: p.x, y: p.y }];
+  const c = [];
+  for (const dx of [0, 1]) for (const dy of [0, 1]) c.push({ x: p.x + dx, y: p.y + dy });
+  return c;
+}
+
+/** 两棋子间的最近格距（按各自占据格两两求最小） */
+function nearestDist(a, b) {
+  let best = Infinity;
+  for (const ca of pieceCells(a)) for (const cb of pieceCells(b)) {
+    const d = mdist(ca.x, ca.y, cb.x, cb.y);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+/** 刀魂（33 号）的 n：以其为中心 3×3 内随从数量（双方、含自身、实时计算） */
+function bladeN(p) {
+  let n = 0;
+  for (const q of S.pieces) {
+    if (q.dead) continue;
+    const t = getDef(q.defId).type;
+    if (t !== 'follower' && t !== 'grave') continue;
+    for (const c of pieceCells(q)) {
+      if (Math.abs(c.x - p.x) <= 1 && Math.abs(c.y - p.y) <= 1) { n++; break; }
+    }
+  }
+  return Math.max(1, n);
+}
+
+/** 有效射程（刀魂动态，其余为静态值；定炮蓄满 +1 在攻击目标计算中另行叠加） */
+function effRange(p) {
+  return p.defId === 33 ? bladeN(p) : p.range;
+}
+
+/** 是否为 23 号独行侠的禁入邻圈（对 owner 阵营而言） */
+function inLonerZone(x, y, owner) {
+  for (const q of S.pieces) {
+    if (q.dead || q.defId !== 23 || q.owner !== owner) continue;
+    if (mdist(x, y, q.x, q.y) <= 1) return true;
+  }
+  return false;
+}
+
+/** 通用可达空格 BFS（≤maxStep 步，途经不可穿子，独行侠禁入圈对友方生效），含起点 */
+function bfsEmptyCells(state, p, maxStep) {
+  const out = [{ x: p.x, y: p.y }];
+  if (maxStep <= 0) return out;
+  const occupied = new Set();
+  for (const q of state.pieces) {
+    if (q.dead || q.uid === p.uid) continue;
+    for (const c of pieceCells(q)) occupied.add(c.x + ',' + c.y);
+  }
+  const seen = new Set([p.x + ',' + p.y]);
+  let frontier = [{ x: p.x, y: p.y }];
+  for (let step = 0; step < maxStep; step++) {
+    const next = [];
+    for (const cur of frontier) {
+      for (const [dx, dy] of DIRS) {
+        const nx = cur.x + dx, ny = cur.y + dy;
+        const key = nx + ',' + ny;
+        if (!inBoard(nx, ny) || seen.has(key) || occupied.has(key)) continue;
+        seen.add(key);
+        if (inLonerZone(nx, ny, p.owner)) continue;
+        next.push({ x: nx, y: ny });
+        out.push({ x: nx, y: ny });
+      }
+    }
+    frontier = next;
+  }
+  return out;
+}
+
+/* ─────────── 部署 ─────────── */
+
+function baseDeployRows(owner) {
+  const rows = [];
+  for (let y = 1; y <= H; y++) {
+    if (owner === 0 ? y <= 8 : y >= 6) rows.push(y);
+  }
+  return rows;
+}
+
+/**
+ * 回合开始时结算“推进许可”：在本方不可部署的行中，
+ * 己方该行棋子数 ≥ 对方该行棋子数 + 2，则该行本回合可部署。
+ */
+function computeExtraRows(state, owner) {
+  const base = new Set(baseDeployRows(owner));
+  const rows = [];
+  for (let y = 1; y <= H; y++) {
+    if (base.has(y)) continue;
+    let own = 0, opp = 0;
+    for (const p of state.pieces) {
+      if (p.dead || p.defId === -1) continue;
+      if (p.y === y || (p.big && y >= p.y && y <= p.y + 1)) {
+        if (p.owner === owner) own++; else opp++;
+      }
+    }
+    if (own >= opp + 2) rows.push(y);
+  }
+  state.extraRows[owner] = rows;
+}
+
+function deployRows(state, owner) {
+  const all = baseDeployRows(owner).concat(state.extraRows[owner] || []);
+  return new Set(all);
+}
+
+/** (x,y) 为锚点能否部署该棋子 */
+function canDeployAt(state, defId, owner, x, y) {
+  const def = getDef(defId);
+  const cells = defId === 5
+    ? [{ x, y }, { x: x + 1, y }, { x, y: y + 1 }, { x: x + 1, y: y + 1 }]
+    : [{ x, y }];
+  const rows = deployRows(state, owner);
+  for (const c of cells) {
+    if (!inBoard(c.x, c.y)) return false;
+    if (!rows.has(c.y)) return false;               // 大肉比跨行的两行都需合法
+    if (pieceAt(state, c.x, c.y)) return false;
+    if (inLonerZone(c.x, c.y, owner)) return false; // 独行侠禁入圈
+  }
+  return true;
+}
+
+/** 全部合法部署锚点 */
+function deployCells(state, defId, owner) {
+  const out = [];
+  for (let y = 1; y <= H; y++) for (let x = 1; x <= W; x++) {
+    if (canDeployAt(state, defId, owner, x, y)) out.push({ x, y });
+  }
+  return out;
+}
+
+/* ─────────── 行动次数 ─────────── */
+
+/** 该棋子本回合的有效行动次数上限 */
+function effActions(p) {
+  let n = getDef(p.defId).acts;
+  if (p.defId === 4) n = 1;                       // 定炮：每回合一次行动（蓄力/开炮）
+  if (p.defId === 21) n = 1;                      // 神行千里：蓄气/神行
+  if (p.defId === 23) n = p.beatCount % 2 === 0 ? 6 : 0; // 独行侠节拍
+  if (p.defId === 12) {                           // 跑得快贴脸惩罚
+    for (const q of S.pieces) {
+      if (q.dead || q.owner === p.owner) continue;
+      if (nearestDist(p, q) === 1) { n -= 1; break; }
+    }
+  }
+  return Math.max(0, n);
+}
+
+/** 有效移速 */
+function effMv(p) {
+  let m = p.mv;
+  if (p.defId === 12) {
+    for (const q of S.pieces) {
+      if (q.dead || q.owner === p.owner) continue;
+      if (nearestDist(p, q) === 1) { m -= 1; break; }
+    }
+  }
+  return Math.max(0, m);
+}
+
+/* ─────────── 移动 ─────────── */
+
+/** 移动落点集合。特殊：13 号直线三格；5 号整体平移一格（蓄力逻辑在上层）。 */
+function moveTargets(state, p) {
+  const out = [];
+  const occupied = new Set();
+  for (const q of state.pieces) {
+    if (q.dead || q.uid === p.uid) continue;
+    for (const c of pieceCells(q)) occupied.add(c.x + ',' + c.y);
+  }
+
+  if (p.defId === 13) {
+    // 必须直线恰好三格，途经全空
+    for (const [dx, dy] of DIRS) {
+      let ok = true;
+      for (let i = 1; i <= 3; i++) {
+        const nx = p.x + dx * i, ny = p.y + dy * i;
+        if (!inBoard(nx, ny) || occupied.has(nx + ',' + ny) || inLonerZone(nx, ny, p.owner)) { ok = false; break; }
+      }
+      if (ok) out.push({ x: p.x + dx * 3, y: p.y + dy * 3 });
+    }
+    return out;
+  }
+
+  if (p.big) {
+    // 2×2 整体平移一格
+    for (const [dx, dy] of DIRS) {
+      let ok = true;
+      for (const c of pieceCells(p)) {
+        const nx = c.x + dx, ny = c.y + dy;
+        if (!inBoard(nx, ny) || occupied.has(nx + ',' + ny) || inLonerZone(nx, ny, p.owner)) { ok = false; break; }
+      }
+      if (ok) out.push({ x: p.x + dx, y: p.y + dy });
+    }
+    return out;
+  }
+
+  // 常规 BFS：≤ effMv 步，途经格必须为空（复用通用 BFS）
+  return bfsEmptyCells(state, p, effMv(p));
+}
+
+/* ─────────── 攻击 ─────────── */
+
+/**
+ * 可攻击的敌方单位列表。
+ * 穿透规则：对每个候选目标做一次多源 BFS（起点=自身占据格），
+ * 把“其他敌方棋子”视为墙体；存在 ≤射程 的路径才可攻击。
+ */
+function attackTargets(state, p) {
+  const out = [];
+  if (p.defId === 4 && p.charge < 2) return out;   // 定炮未蓄够力
+  const rngEff = p.defId === 4 ? effRange(p) + (p.charge >= 5 ? 1 : 0) : effRange(p); // 蓄满5格射程+1
+  const myCells = new Set(pieceCells(p).map((c) => c.x + ',' + c.y));
+
+  const candidates = state.pieces.filter((q) =>
+    !q.dead && q.owner !== p.owner &&
+    nearestDist(p, q) <= rngEff);
+
+  for (const t of candidates) {
+    if (p.defId === 9 && p.hitThisTurn.includes(t.uid)) continue; // 射手不重复打同一目标
+    const tKeys = new Set(pieceCells(t).map((c) => c.x + ',' + c.y));
+    // 多源 BFS
+    const dist = new Map();
+    let frontier = [];
+    for (const k of myCells) { dist.set(k, 0); frontier.push(k); }
+    let reach = -1;
+    bfs:
+    while (frontier.length) {
+      const next = [];
+      for (const key of frontier) {
+        const d0 = dist.get(key);
+        if (d0 >= rngEff) continue;
+        const [cx, cy] = key.split(',').map(Number);
+        for (const [dx, dy] of DIRS) {
+          const nx = cx + dx, ny = cy + dy;
+          if (!inBoard(nx, ny)) continue;
+          const nk = nx + ',' + ny;
+          if (dist.has(nk)) continue;
+          if (tKeys.has(nk)) {                     // 抵达目标
+            if (d0 + 1 <= rngEff) { reach = d0 + 1; break bfs; }
+            continue;
+          }
+          const occ = pieceAt(state, nx, ny);
+          if (occ && occ.owner !== p.owner) continue; // 其他敌方棋子 = 墙
+          dist.set(nk, d0 + 1);
+          next.push(nk);
+        }
+      }
+      frontier = next;
+    }
+    if (reach >= 0) out.push(t);
+  }
+  return out;
+}
+
+/** 奶妈的可治疗对象（射程内血量未满的己方） */
+function healTargets(state, p) {
+  return state.pieces.filter((q) =>
+    !q.dead && q.owner === p.owner && q.hp < q.maxHp &&
+    nearestDist(p, q) <= effRange(p));
+}
+
+/** 24 号厚脸皮：来自正面的伤害至多 10。正面 = 攻击者位于受害者朝前线一侧。 */
+function isFrontal(attacker, victim) {
+  // victim 的基地在 y=1(owner0) / y=13(owner1)；从前线方向（远离基地一侧）袭来为正面
+  return victim.owner === 0 ? attacker.y > victim.y : attacker.y < victim.y;
+}
+
+
+/* ═══════════════ engine.js · 伤害 / 治疗 / 死亡管线 ═══════════════
+ * 所有伤害统一经过 dealDamage，依次结算：
+ *   金身免疫 → 厚脸皮正面减免 → 策反倒戈 → 扣血 →
+ *   投石机标记引爆 → 名刀守护 → 死亡与遗言 → 伤害转化器反弹
+ * ═══════════════════════════════════════════════════════════════ */
+
+/** 待结算的死亡遗言队列 */
+const pendingDeaths = [];
+
+/**
+ * 对目标造成伤害。
+ * @param src  来源棋子（可为 null，如法术直接伤害）
+ * @param opts {hit:是否为攻击命中, isMark:标记引爆, noCounter:禁止反弹,
+ *              noGuard:无视名刀守护, silent:不播受击特效}
+ */
+async function dealDamage(state, target, amount, src, opts) {
+  opts = opts || {};
+  if (!target || target.dead || !(amount > 0)) return;
+
+  // ── 金身：不受任何伤害
+  if (target.shieldUntil > state.turnCounter) {
+    ev('block', { uid: target.uid });
+    pushLog(state, `🛡️ ${getDef(target.defId).name} 处于金身状态，免疫了 ${amount} 点伤害！`, 'l-impt');
+    return;
+  }
+
+  // ── 策反：首次受击时收编攻击者（本次伤害落空）
+  if (src && target.charmFrom && state.turnCounter >= target.charmFrom && state.turnCounter < target.charmTo
+      && src.owner !== target.owner && src.defId !== -1) {
+    target.charmFrom = 0; target.charmTo = 0;
+    const oldOwner = src.owner;
+    src.owner = target.owner;
+    src.apLeft = 0;
+    ev('charm', { uid: src.uid });
+    pushLog(state, `🎭 策反成功！${PNAME[oldOwner]}的【${getDef(src.defId).name}】临阵倒戈，加入${PNAME[target.owner]}！`, 'l-impt');
+    return;
+  }
+
+  // ── 厚脸皮：来自正面的攻击伤害至多 10
+  let dmg = amount;
+  let frontal = false;
+  if (src && opts.hit && target.defId === 24 && isFrontal(src, target)) {
+    dmg = Math.min(dmg, 10);
+    frontal = true;
+  }
+
+  target.hp -= dmg;
+  ev('damage', { uid: target.uid, amount: dmg, frontal, crit: opts.crit || false });
+
+  // ── 投石机标记：被“标记方另一枚非投石机棋子”再次命中时引爆
+  if (opts.hit && src && target.mark10 && !opts.isMark &&
+      src.owner === target.mark10.owner && src.defId !== 10 && !target.dead) {
+    const mk = target.mark10;
+    target.mark10 = null;
+    pushLog(state, `🪨 投石机标记被引爆！`);
+    await dealDamage(state, target, 5, pieceByUid(state, mk.srcUid), { isMark: true });
+  }
+  if (target.dead) return;
+
+  // ── 致命伤害：名刀守护
+  if (target.hp <= 0) {
+    if (!opts.noGuard && !target.guardUsed && hasBladeGuard(state, target)) {
+      target.guardUsed = true;
+      target.hp = 1;
+      ev('guard', { uid: target.uid });
+      pushLog(state, `🗡️ 名刀之佑！【${getDef(target.defId).name}】避免了一次致命伤害，以 1 血存活。`, 'l-impt');
+      return;
+    }
+    await killPiece(state, target, src);
+    return;
+  }
+
+  // ── 伤害转化器：受到友方棋子伤害时反弹等量给射程内敌人
+  if (src && target.defId === 16 && src.owner === target.owner && !opts.noCounter) {
+    ev('counter', { uid: target.uid });
+    pushLog(state, `🔄 伤害转化器将 ${dmg} 点友方伤害转化为反击！`);
+    const foes = state.pieces.filter((q) => !q.dead && q.owner !== target.owner &&
+                                           nearestDist(target, q) <= effRange(target));
+    for (const f of foes) await dealDamage(state, f, dmg, target, { noCounter: true });
+  }
+}
+
+/** 目标是否有己方名刀（本体形态）守护 */
+function hasBladeGuard(state, target) {
+  return state.pieces.some((q) => !q.dead && q.defId === 3 && q.owner === target.owner &&
+                                  nearestDist(q, target) <= 6);
+}
+
+/** 治疗（回满血会引爆投石机标记） */
+async function heal(state, target, amount) {
+  if (!target || target.dead || !(amount > 0)) return;
+  const real = Math.min(amount, target.maxHp - target.hp);
+  if (real <= 0) return;
+  target.hp += real;
+  ev('heal', { uid: target.uid, amount: real });
+  // 回满血触发投石机标记
+  if (target.hp >= target.maxHp && target.mark10) {
+    const mk = target.mark10;
+    target.mark10 = null;
+    pushLog(state, `🪨 【${getDef(target.defId).name}】回满血，投石机标记引爆！`);
+    await dealDamage(state, target, 5, pieceByUid(state, mk.srcUid), { isMark: true });
+  }
+}
+
+/** 击杀：标记死亡 + 记录遗言 + 杀手升级 */
+async function killPiece(state, victim, killer) {
+  if (victim.dead) return;
+  victim.dead = true;
+  victim.hp = 0;
+  ev('death', { uid: victim.uid, defId: victim.defId });
+
+  // 杀手击杀升级
+  if (killer && !killer.dead && killer.defId === 26 && victim.owner !== killer.owner) {
+    killer.killCount++;
+    const stage = ((killer.killCount - 1) % 4) + 1;
+    if (stage === 1 || stage === 4) {
+      killer.maxHp += 10;
+      killer.hp = Math.min(killer.maxHp, killer.hp + 10);
+      pushLog(state, `🔪 杀手完成第 ${killer.killCount} 杀：+10 血量上限并回复 10 血！（${killer.hp}/${killer.maxHp}）`, 'l-impt');
+    } else if (stage === 2) {
+      killer.atk += 5;
+      pushLog(state, `🔪 杀手完成第 ${killer.killCount} 杀：+5 攻击力！（atk ${killer.atk}）`, 'l-impt');
+    } else {
+      killer.range += 1;
+      pushLog(state, `🔪 杀手完成第 ${killer.killCount} 杀：+1 攻击范围！（射程 ${killer.range}）`, 'l-impt');
+    }
+    ev('buff', { uid: killer.uid });
+  }
+
+  if (getDef(victim.defId).type !== 'base' && getDef(victim.defId).type !== 'grave') {
+    pendingDeaths.push({ victim, killer });
+  } else if (victim.defId === -1) {
+    checkWin(state);
+  }
+}
+
+/** 逐个结算死亡遗言（可能异步等待玩家选择） */
+async function flushDeaths(state) {
+  while (pendingDeaths.length) {
+    const { victim, killer } = pendingDeaths.shift();
+    const fn = DEATHRATTLES[victim.defId];
+    if (fn) await fn(state, victim, killer);
+  }
+}
+
+function checkWin(state) {
+  const b0 = state.pieces.find((p) => p.defId === -1 && p.owner === 0);
+  const b1 = state.pieces.find((p) => p.defId === -1 && p.owner === 1);
+  if (!b0 || !b1) return; // 单元测试等无基地场景不判负
+  const d0 = b0.hp <= 0, d1 = b1.hp <= 0;
+  if (d0 && d1) { state.winner = 1 - state.curPlayer; }
+  else if (d0) { state.winner = 1; }
+  else if (d1) { state.winner = 0; }
+  if (state.winner != null) {
+    state.phase = 'over';
+    pushLog(state, `🏆 ${PNAME[state.winner]}摧毁了对方基地，获得胜利！`, 'l-impt');
+    ev('win', { winner: state.winner });
+  }
+}
+
+
+/* ═══════════════ abilities.js · 主动技能 & 死亡遗言 ═══════════════
+ * SKILLS[defId] = {
+ *   label   : 界面按钮文字
+ *   usable(p)          : 是否可发动
+ *   targetSpec(state,p): 选择规格（交给 UI/测试环境解析）
+ *   exec(state,p,got)  : got 为玩家选择结果
+ * }
+ * DEATHRATTLES[defId] = async (state, victim, killer) => {}
+ * ═══════════════════════════════════════════════════════════════ */
+
+function foesOf(state, owner) {
+  return state.pieces.filter((q) => !q.dead && q.owner !== owner);
+}
+/** 敌方随从（不含基地） */
+function foeFollowers(state, owner) {
+  return foesOf(state, owner).filter((q) => getDef(q.defId).type === 'follower' || getDef(q.defId).type === 'grave');
+}
+/** 己方随从（不含基地） */
+function myFollowers(state, owner) {
+  return state.pieces.filter((q) => !q.dead && q.owner === owner &&
+    (getDef(q.defId).type === 'follower' || getDef(q.defId).type === 'grave'));
+}
+
+const SKILLS = {};
+
+/* ── 4 定炮 · 蓄力 ── */
+SKILLS[4] = {
+  label: '⚡ 蓄力',
+  usable: (p) => p.charge < 5,
+  targetSpec: () => ({ kind: 'none' }),
+  async exec(state, p) {
+    p.charge++;
+    ev('buff', { uid: p.uid });
+    pushLog(state, `🎯 定炮蓄力中……（${p.charge}/5）`);
+  },
+};
+
+/* ── 6 BUFF怪 · 战吼增益 ── */
+SKILLS[6] = {
+  label: '📣 增益 +10攻',
+  usable: (p) => true,
+  targetSpec: (state, p) => ({
+    kind: 'piece',
+    pieces: myFollowers(state, p.owner).filter((q) => q.defId !== 10 && nearestDist(p, q) <= effRange(p)),
+    hint: '选择射程内的一名友方棋子获得下回合 +10 攻击（对投石机无效）',
+  }),
+  async exec(state, p, got) {
+    got.atkBuffs.push({ amt: 10, until: state.turnCounter + 3 });
+    ev('buff', { uid: got.uid });
+    pushLog(state, `📣 【${getDef(got.defId).name}】获得下回合 +10 攻击力！`, 'l-impt');
+  },
+};
+
+/* ── 7 钩子 · 拉拽 ── */
+SKILLS[7] = {
+  label: '🪝 钩拉',
+  usable: () => true,
+  targetSpec: (state, p) => ({
+    kind: 'piece',
+    pieces: foeFollowers(state, p.owner).filter((q) => !q.big && nearestDist(p, q) <= effRange(p)),
+    hint: '选择攻击范围内的一名敌方棋子，将其钩到身边',
+  }),
+  async exec(state, p, got) {
+    // 第二段：选拉到的落点（钩子周围一圈空格）
+    const spots = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      if (!dx && !dy) continue;
+      const x = p.x + dx, y = p.y + dy;
+      if (!inBoard(x, y) || pieceAt(state, x, y)) continue;
+      spots.push({ x, y });
+    }
+    let dest;
+    if (spots.length === 0) { pushLog(state, '🪝 钩子周围没有空格，钩拉失败。'); return; }
+    else if (spots.length === 1) dest = spots[0];
+    else dest = await ENV.choose({ kind: 'cell', cells: spots, hint: '选择把敌人钩到哪个位置' });
+    ev('hook', { uid: got.uid, fx: p.x, fy: p.y, x0: got.x, y0: got.y, tx: dest.x, ty: dest.y });
+    got.x = dest.x; got.y = dest.y;
+    pushLog(state, `🪝 【${getDef(got.defId).name}】被钩到了 (${dest.x},${dest.y})！`, 'l-impt');
+  },
+};
+
+/* ── 14 献祭炮 · 献祭齐射 ── */
+SKILLS[14] = {
+  label: '🔥 献祭齐射',
+  usable: () => true,
+  targetSpec: (state, p) => ({
+    kind: 'piece',
+    pieces: myFollowers(state, p.owner).filter((q) => q.uid !== p.uid && nearestDist(p, q) <= effRange(p)),
+    hint: '选择要献祭的友方棋子（将扣除你 10 点血量上限）',
+  }),
+  async exec(state, p, victim) {
+    p.maxHp -= 10;
+    p.hp = Math.min(p.hp, p.maxHp);
+    ev('damage', { uid: p.uid, amount: 0, silentNum: true });
+    pushLog(state, `🔥 献祭炮扣除了自己 10 点血量上限（上限 ${p.maxHp}）。`);
+    const vAtk = effAtk(victim);
+    await killPiece(state, victim, null);
+    await flushDeaths(state);
+    // 第二段：选一列（射程覆盖的列），点该列任意格代表选列
+    const cols = [];
+    const rng = effRange(p);
+    for (let c = Math.max(1, p.x - rng); c <= Math.min(W, p.x + rng); c++) cols.push(c);
+    const colCells = [];
+    for (const c of cols) for (let y = 1; y <= H; y++) colCells.push({ x: c, y, col: c });
+    const picked = await ENV.choose({
+      kind: 'cell', cells: colCells,
+      hint: `选择轰击哪一列（对距你最近的敌方造成 ${vAtk} 伤害）`,
+    });
+    // 该列上最近的敌方单位
+    let best = null, bestD = Infinity;
+    for (const q of foesOf(state, p.owner)) {
+      const covers = q.big ? (picked.col >= q.x && picked.col <= q.x + 1) : q.x === picked.col;
+      if (!covers) continue;
+      const d = nearestDist(p, q);
+      if (d < bestD) { bestD = d; best = q; }
+    }
+    if (!best) { pushLog(state, `🔥 第 ${picked.col} 列上没有敌方单位，炮击落空……`); return; }
+    pushLog(state, `🔥 献祭齐射命中第 ${picked.col} 列的【${getDef(best.defId).name}】，造成 ${vAtk} 伤害！`, 'l-impt');
+    await dealDamage(state, best, vAtk, p, { hit: true });
+  },
+};
+
+/* ── 15 蓄力怪 · 强化 ── */
+SKILLS[15] = {
+  label: '🔋 强化(限3次)',
+  usable: (p) => p.skillUses < 3,
+  targetSpec: () => ({
+    kind: 'option',
+    options: [{ label: '+10 攻击力', value: 'atk' }, { label: '+1 攻击范围', value: 'rng' }],
+    hint: '选择强化方式（整场限 3 次）',
+  }),
+  async exec(state, p, got) {
+    p.skillUses++;
+    if (got === 'atk') { p.atk += 10; pushLog(state, `🔋 蓄力怪强化：攻击力提升至 ${p.atk}！（剩余 ${3 - p.skillUses} 次）`); }
+    else { p.range += 1; pushLog(state, `🔋 蓄力怪强化：射程提升至 ${p.range}！（剩余 ${3 - p.skillUses} 次）`); }
+    ev('buff', { uid: p.uid });
+  },
+};
+
+/* ── 19 路障小法师 · 召唤路障 ── */
+SKILLS[19] = {
+  label: '🚧 召唤路障',
+  usable: () => true,
+  targetSpec: (state, p) => {
+    const cells = [];
+    for (let y = 1; y <= H; y++) for (let x = 1; x <= W; x++) {
+      if (!pieceAt(state, x, y) && mdist(p.x, p.y, x, y) <= effRange(p)) cells.push({ x, y });
+    }
+    return { kind: 'cell', cells, hint: '选择放置路障的空格（存活到你的下回合开始）' };
+  },
+  async exec(state, p, got) {
+    const bar = makePiece(state, p.owner, -3, got.x, got.y);
+    bar.diesAt = state.turnCounter + 2;
+    bar.justDeployed = false;
+    state.pieces.push(bar);
+    ev('deploy', { uid: bar.uid });
+    pushLog(state, `🚧 路障小法师在 (${got.x},${got.y}) 召唤了路障（它撑不过你的下回合开始）。`);
+  },
+};
+
+/* ── 21 神行千里 ── */
+SKILLS[21] = {
+  label: '🌀 神行千里',
+  usable: (p) => p.charge >= 2 && p.hp > 10,
+  targetSpec: () => ({ kind: 'none' }),
+  async exec(state, p) {
+    p.hp -= 10;
+    p.charge = 0;
+    ev('damage', { uid: p.uid, amount: 10 });
+    pushLog(state, `🌀 神行千里发动！扣除 10 血（${p.hp}/${p.maxHp}），请选择落点（≤6 格）。`, 'l-impt');
+    const cells = bfsEmptyCells(state, p, 6);
+    const dest = await ENV.choose({ kind: 'cell', cells, hint: '神行：选择落点（可原地不动）' });
+    if (dest.x !== p.x || dest.y !== p.y) {
+      ev('move', { uid: p.uid, tx: dest.x, ty: dest.y });
+      p.x = dest.x; p.y = dest.y;
+    }
+    // 移动后可进行一次攻击
+    const targets = attackTargets(state, p);
+    if (!targets.length) { pushLog(state, '🌀 周围没有可攻击的目标，神行结束。'); return; }
+    const t = await ENV.choose({
+      kind: 'piece',
+      pieces: targets,
+      hint: '进行一次攻击（取消则放弃）',
+      cancelable: true,
+    });
+    if (!t) { pushLog(state, '🌀 放弃了攻击。'); return; }
+    await performAttack(state, p, t);
+  },
+};
+
+/* ═════════════ 死亡遗言 ═════════════ */
+
+const DEATHRATTLES = {};
+
+/* 2 奶妈：死亡时无视距离反击一次 */
+DEATHRATTLES[2] = async (state, victim) => {
+  const foes = foesOf(state, victim.owner);
+  if (!foes.length) return;
+  const t = await ENV.choose({
+    kind: 'piece', pieces: foes, cancelable: true,
+    hint: `奶妈的遗言：选择一名敌方单位进行无视距离的反击（20 伤害，可取消）`,
+  });
+  if (!t) { pushLog(state, '💉 奶妈安详地离去了……'); return; }
+  pushLog(state, `💉 奶妈的遗言发动！无视距离对【${getDef(t.defId).name}】造成 20 伤害！`, 'l-impt');
+  await dealDamage(state, t, victim.atk, null, {});
+};
+
+/* 11 白嫖怪：下回合额外召唤一次 */
+DEATHRATTLES[11] = async (state, victim) => {
+  state.extraDraw[victim.owner]++;
+  pushLog(state, `🆓 白嫖怪死亡：${PNAME[victim.owner]}下回合将额外召唤一枚棋子！`, 'l-impt');
+};
+
+/* 12 跑得快：留下墓地 */
+DEATHRATTLES[12] = async (state, victim) => {
+  const grave = makePiece(state, victim.owner, -2, victim.x, victim.y);
+  grave.justDeployed = false;
+  state.pieces.push(grave);
+  ev('deploy', { uid: grave.uid });
+  pushLog(state, `👟 跑得快倒下了，原地留下一座墓地（0/70）。`);
+};
+
+/* 20 超级跑得快：反咬击杀者 */
+DEATHRATTLES[20] = async (state, victim, killer) => {
+  if (!killer || killer.dead || killer.owner === victim.owner) return;
+  pushLog(state, `💥 超级跑得快的遗言：对击杀者【${getDef(killer.defId).name}】造成 20 伤害！`, 'l-impt');
+  await dealDamage(state, killer, 20, null, {});
+};
+
+
+/* ═══════════════ spells.js · 法术释放 ═══════════════
+ * SPELL_TARGETS[defId](state, owner) → 选择规格
+ * CAST[defId] = async (state, owner, got) => {}
+ * ═════════════════════════════════════════════════ */
+
+const SPELL_TARGETS = {};
+const CAST = {};
+
+/* ── 8 爆弹 · 田字 2×2 AOE ── */
+SPELL_TARGETS[8] = (state, owner) => {
+  const cells = [];
+  for (let y = 1; y < H; y++) for (let x = 1; x < W; x++) {
+    let hasUnit = false;
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      if (pieceAt(state, x + dx, y + dy)) { hasUnit = true; break; }
+    }
+    if (hasUnit) cells.push({ x, y });
+  }
+  return { kind: 'cell', cells, hint: '选择“田”字格锚点（左上格），引爆 2×2 区域内所有目标' };
+};
+CAST[8] = async (state, owner, got) => {
+  pushLog(state, `💣 爆弹在 (${got.x},${got.y}) 引爆！`, 'l-impt');
+  ev('spell', { defId: 8, x: got.x, y: got.y });
+  const hits = new Set();
+  for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    const t = pieceAt(state, got.x + dx, got.y + dy);
+    if (t && !hits.has(t.uid)) hits.add(t.uid);
+  }
+  for (const uid of hits) {
+    const t = state.pieces.find((p) => p.uid === uid);
+    await dealDamage(state, t, 20, null, {});
+  }
+};
+
+/* ── 17 金身 ── */
+SPELL_TARGETS[17] = (state, owner) => ({
+  kind: 'piece',
+  pieces: myFollowers(state, owner),
+  hint: '选择一名友方棋子获得金身（免疫伤害直到你的下回合开始）',
+});
+CAST[17] = async (state, owner, got) => {
+  got.shieldUntil = state.turnCounter + 2;
+  ev('spell', { defId: 17, uid: got.uid });
+  pushLog(state, `🛡️ 金身加护！【${getDef(got.defId).name}】免疫一切伤害直到${PNAME[owner]}下回合开始。`, 'l-impt');
+};
+
+/* ── 18 死吧！── */
+SPELL_TARGETS[18] = (state, owner) => ({
+  kind: 'piece',
+  pieces: myFollowers(state, owner).filter((q) => getDef(q.defId).type === 'follower'),
+  hint: '选择一名友方：你的下回合它命中的第一个敌方棋子立即死亡',
+});
+CAST[18] = async (state, owner, got) => {
+  got.reaperFrom = state.turnCounter + 2;
+  got.reaperTo = state.turnCounter + 2;
+  ev('spell', { defId: 18, uid: got.uid });
+  pushLog(state, `💀 死吧！【${getDef(got.defId).name}】眼中燃起幽光——你下回合它命中的第一个敌方将立即死亡。`, 'l-impt');
+};
+
+/* ── 22 策反 ── */
+SPELL_TARGETS[22] = (state, owner) => ({
+  kind: 'piece',
+  pieces: myFollowers(state, owner),
+  hint: '选择一名友方：到你的下回合开始前，首次攻击它的敌人将被策反',
+});
+CAST[22] = async (state, owner, got) => {
+  got.charmFrom = state.turnCounter + 1;
+  got.charmTo = state.turnCounter + 2;
+  ev('spell', { defId: 22, uid: got.uid });
+  pushLog(state, `🎭 策反陷阱布下！【${getDef(got.defId).name}】静待敌人自投罗网。`, 'l-impt');
+};
+
+/* ── 25 重铸 ── */
+SPELL_TARGETS[25] = () => ({
+  kind: 'option',
+  options: [
+    { label: '♻️ 召唤一次', value: 'one' },
+    { label: '⚔️ 献祭两召', value: 'two' },
+  ],
+  hint: '重铸：直接召唤一次；或消灭两名血量≥上限一半的友方棋子，召唤两次',
+});
+CAST[25] = async (state, owner, got) => {
+  if (got === 'one') {
+    await summonOnce(state, owner);
+    return;
+  }
+  // 献祭双召
+  const eligible = myFollowers(state, owner)
+    .filter((q) => getDef(q.defId).type === 'follower' && q.hp >= q.maxHp / 2);
+  if (eligible.length < 2) {
+    pushLog(state, '♻️ 血量过半的友方不足两名，献祭失败（法术仍被消耗）。');
+    return;
+  }
+  for (let i = 0; i < 2; i++) {
+    const pool = myFollowers(state, owner)
+      .filter((q) => getDef(q.defId).type === 'follower' && q.hp >= q.maxHp / 2 && !q.dead);
+    if (!pool.length) break;
+    const v = await ENV.choose({ kind: 'piece', pieces: pool, hint: `选择第 ${i + 1} 名献祭的友方棋子` });
+    if (!v) break;
+    await killPiece(state, v, null);
+  }
+  await flushDeaths(state);
+  await summonOnce(state, owner);
+  if (state.winner == null) await summonOnce(state, owner);
+};
+
+/** 抽一枚并处理（随从→部署 / 法术→入库）。供 25 号使用。 */
+async function summonOnce(state, owner) {
+  let defId = rndInt(state, 1, 26);
+  if (defId === 3 && rnd(state) >= 1 / 3) defId = 33; // 名刀形态判定
+  const def = getDef(defId);
+  pushLog(state, `♻️ 重铸召唤：【${def.name}】${def.emoji}`, 'l-impt');
+  if (def.type === 'spell') {
+    state.stored[owner].push({ defId, remain: def.limit });
+    pushLog(state, `📜 法术【${def.name}】自动存入储存栏（期限 ${def.limit} 回合）。`);
+    return;
+  }
+  const cells = deployCells(state, defId, owner);
+  if (!cells.length) { pushLog(state, `⚠️ 无处可部署【${def.name}】，被迫放弃。`); return; }
+  const spot = await ENV.choose({
+    kind: 'cell', cells,
+    hint: `为重铸召唤的【${def.name}】选择部署位置`,
+  });
+  deployPiece(state, owner, defId, spot.x, spot.y);
+}
+
+
+/* ═══════════════ game.js · 回合流程 & 动作 API ═══════════════
+ * 所有玩家操作入口都遵循同一节奏：
+ *    snap() 快照（供悔棋） → 校验 → 执行 → 结算遗言 → 检查胜负
+ * ═════════════════════════════════════════════════════════════ */
+
+/** 抽牌（名刀抽到时立即进行形态判定，手牌中直接呈现最终形态） */
+function drawCards(state, owner, n) {
+  for (let i = 0; i < n; i++) {
+    let defId = rndInt(state, 1, 26);
+    if (defId === 3 && rnd(state) >= 1 / 3) defId = 33;
+    state.hand[owner].push({ uid: ++state.uidSeq, defId });
+    const def = getDef(defId);
+    pushLog(state, `${PNAME[owner]}召唤了【${def.name}】${def.emoji}${def.type === 'spell' ? '（法术）' : ''}`);
+  }
+}
+
+/** 底层部署：放置棋子并处理冲锋询问 */
+async function deployPiece(state, owner, defId, x, y) {
+  const p = makePiece(state, owner, defId, x, y);
+  state.pieces.push(p);
+  ev('deploy', { uid: p.uid });
+  pushLog(state, `${PNAME[owner]}部署【${getDef(defId).name}】于 (${x},${y})`);
+  if (defId === 1) {
+    const choice = await ENV.choose({
+      kind: 'option',
+      options: [
+        { label: '⚡ 获得冲锋（−10 血）', value: 'charge' },
+        { label: '🛡️ 保持满血', value: 'normal' },
+      ],
+      hint: '冲锋怪：是否牺牲 10 血量换取部署当回合即可行动？',
+    });
+    if (choice === 'charge') {
+      p.hp -= 10;
+      p.justDeployed = false;
+      p.apLeft = effActions(p);
+      pushLog(state, '⚔️ 冲锋怪嘶吼着冲入了战场！（本回合即可行动）', 'l-impt');
+      ev('buff', { uid: p.uid });
+    }
+  }
+  return p;
+}
+
+/** 部署阶段 → 行动阶段推进 */
+function checkPhaseAdvance() {
+  if (S.phase === 'deploy' && S.hand[S.curPlayer].length === 0 && !S.winner) {
+    S.phase = 'action';
+    ev('phase', { phase: 'action' });
+  }
+}
+
+/* ─────────── 回合流转 ─────────── */
+
+async function startTurnInternal() {
+  S.turnCounter++;
+  const me = S.curPlayer;
+
+  // 全局时效清理（标记 / 金身 / 斩杀 / 策反 / 攻击增益 / 到期单位）
+  for (const p of S.pieces) {
+    if (p.dead) continue;
+    if (p.mark10 && S.turnCounter >= p.mark10.expires) p.mark10 = null;
+    if (p.shieldUntil && S.turnCounter >= p.shieldUntil) p.shieldUntil = 0;
+    if (p.reaperTo && S.turnCounter > p.reaperTo) { p.reaperFrom = 0; p.reaperTo = 0; }
+    if (p.charmTo && S.turnCounter >= p.charmTo) { p.charmFrom = 0; p.charmTo = 0; }
+    if (p.atkBuffs.length) p.atkBuffs = p.atkBuffs.filter((b) => b.until > S.turnCounter);
+    if (p.diesAt && S.turnCounter >= p.diesAt) {
+      pushLog(S, `⌛ 【${getDef(p.defId).name}】的召唤物耗尽了时限，化为尘埃。`);
+      await killPiece(S, p, null);
+    }
+  }
+  await flushDeaths(S);
+
+  // 己方棋子：节拍推进 + 行动次数重置
+  for (const p of S.pieces) {
+    if (p.dead || p.owner !== me) continue;
+    p.justDeployed = false;
+    if (p.defId === 23) p.beatCount++;
+    p.apLeft = effActions(p);
+    p.hitThisTurn = [];
+  }
+
+  computeExtraRows(S, me);
+
+  // 储存栏期限递减（remain < 0 销毁）
+  const kept = [];
+  for (const card of S.stored[me]) {
+    card.remain--;
+    if (card.remain < 0) {
+      pushLog(S, `⌛ 法术【${getDef(card.defId).name}】超过储存期限，消散了……`, 'l-impt');
+      ev('expire', { owner: me });
+    } else kept.push(card);
+  }
+  S.stored[me] = kept;
+
+  // 抽牌：基础 2 张 + 白嫖怪加成
+  const n = 2 + S.extraDraw[me];
+  S.extraDraw[me] = 0;
+  drawCards(S, me, n);
+
+  S.phase = 'deploy';
+  ev('turn', { player: me, turn: S.turnCounter });
+  checkPhaseAdvance();
+}
+
+async function endTurn() {
+  if (!S || S.winner != null) return;
+  if (S.phase !== 'action') return;
+  snap();
+  S.hand[S.curPlayer] = [];
+  S.curPlayer = 1 - S.curPlayer;
+  await startTurnInternal();
+}
+
+/* ─────────── 部署阶段动作 ─────────── */
+
+async function deployFollower(handIdx, x, y) {
+  const card = S.hand[S.curPlayer][handIdx];
+  if (!card || getDef(card.defId).type === 'spell') return false;
+  if (!canDeployAt(S, card.defId, S.curPlayer, x, y)) return false;
+  snap();
+  S.hand[S.curPlayer].splice(handIdx, 1);
+  await deployPiece(S, S.curPlayer, card.defId, x, y);
+  checkPhaseAdvance();
+  return true;
+}
+
+/** 无处可放的随从被迫弃置（仅当没有合法位置时允许） */
+function discardUnplaceable(handIdx) {
+  const card = S.hand[S.curPlayer][handIdx];
+  if (!card || getDef(card.defId).type === 'spell') return false;
+  if (deployCells(S, card.defId, S.curPlayer).length > 0) return false;
+  snap();
+  S.hand[S.curPlayer].splice(handIdx, 1);
+  pushLog(S, `⚠️ 战场无处安放【${getDef(card.defId).name}】，只能忍痛放弃。`, 'l-impt');
+  checkPhaseAdvance();
+  return true;
+}
+
+async function storeHandSpell(handIdx) {
+  const card = S.hand[S.curPlayer][handIdx];
+  if (!card || getDef(card.defId).type !== 'spell') return false;
+  snap();
+  S.hand[S.curPlayer].splice(handIdx, 1);
+  S.stored[S.curPlayer].push({ defId: card.defId, remain: getDef(card.defId).limit });
+  pushLog(S, `🧪 【${getDef(card.defId).name}】存入储存栏（期限 ${getDef(card.defId).limit} 回合）。`);
+  checkPhaseAdvance();
+  return true;
+}
+
+async function castHandSpell(handIdx, got) {
+  const card = S.hand[S.curPlayer][handIdx];
+  if (!card || getDef(card.defId).type !== 'spell') return false;
+  snap();
+  S.hand[S.curPlayer].splice(handIdx, 1);
+  await CAST[card.defId](S, S.curPlayer, got);
+  await flushDeaths(S);
+  checkWin(S);
+  checkPhaseAdvance();
+  return true;
+}
+
+async function castStored(idx, got) {
+  const card = S.stored[S.curPlayer][idx];
+  if (!card) return false;
+  snap();
+  S.stored[S.curPlayer].splice(idx, 1);
+  pushLog(S, `✨ ${PNAME[S.curPlayer]}释放了储存的法术【${getDef(card.defId).name}】！`, 'l-impt');
+  await CAST[card.defId](S, S.curPlayer, got);
+  await flushDeaths(S);
+  checkWin(S);
+  return true;
+}
+
+/* ─────────── 行动阶段动作 ─────────── */
+
+async function doMove(uid, x, y) {
+  const p = pieceByUid(S, uid);
+  if (!p || p.owner !== S.curPlayer || S.phase !== 'action') return false;
+  if (p.justDeployed || p.apLeft <= 0) return false;
+
+  // 大肉比：先蓄势再平移
+  if (p.defId === 5) {
+    if (p.charge <= 0) {
+      snap();
+      p.charge = 1;
+      p.apLeft--;
+      ev('buff', { uid: p.uid });
+      pushLog(S, '🐘 大肉比深深蓄势……下次选择移动才会真正挪动！');
+      return true;
+    }
+    const legal = moveTargets(S, p).some((c) => c.x === x && c.y === y);
+    if (!legal) return false;
+    snap();
+    p.charge = 0;
+    ev('move', { uid: p.uid, tx: x, ty: y });
+    p.x = x; p.y = y;
+    p.apLeft--;
+    pushLog(S, `🐘 大肉比轰隆隆地挪到了 (${x},${y})！`);
+    return true;
+  }
+
+  const legal = moveTargets(S, p).some((c) => c.x === x && c.y === y);
+  if (!legal) return false;
+  snap();
+  ev('move', { uid: p.uid, tx: x, ty: y });
+  p.x = x; p.y = y;
+  p.apLeft--;
+  return true;
+}
+
+/**
+ * 攻击核心：结算即死斩杀 / 冲锋怪掷骰 / 投石机挂标 / 射手记录 / 定炮清充能
+ */
+async function performAttack(state, p, target) {
+  ev('attack', { uid: p.uid, tuid: target.uid });
+
+  // ── 死吧！：下回合命中的第一个敌方立即死亡
+  if (p.reaperFrom && state.turnCounter === p.reaperFrom &&
+      getDef(target.defId).type !== 'base') {
+    p.reaperFrom = 0; p.reaperTo = 0;
+    if (target.shieldUntil > state.turnCounter) {
+      pushLog(state, `💀 斩杀之光撞上了金身！【${getDef(target.defId).name}】侥幸存活！`, 'l-impt');
+    } else {
+      pushLog(state, `💀 死吧！！【${getDef(target.defId).name}】当场毙命！`, 'l-impt');
+      await killPiece(state, target, p);
+      await flushDeaths(state);
+      checkWin(state);
+      return;
+    }
+  }
+
+  // ── 伤害掷骰
+  let dmg = effAtk(p);
+  let crit = false;
+  if (p.defId === 1) {
+    const r = rnd(state);
+    if (r < 1 / 12) { dmg += 60; crit = true; }
+    else if (r < 1 / 4) { dmg += 20; }
+  }
+
+  // ── 投石机：零伤挂标
+  if (p.defId === 10) {
+    pushLog(state, `🪨 投石机砸中了【${getDef(target.defId).name}】，附上引信标记！`);
+    if (!target.dead) {
+      target.mark10 = { owner: p.owner, srcUid: p.uid, expires: state.turnCounter + 2 };
+      ev('mark', { uid: target.uid });
+    }
+  } else {
+    await dealDamage(state, target, dmg, p, { hit: true, crit });
+  }
+
+  if (p.defId === 9) p.hitThisTurn.push(target.uid);
+  if (p.defId === 4) p.charge = 0;
+  await flushDeaths(state);
+  checkWin(state);
+}
+
+async function doAttack(uid, targetUid) {
+  const p = pieceByUid(S, uid);
+  const t = pieceByUid(S, targetUid);
+  if (!p || !t || p.owner !== S.curPlayer || S.phase !== 'action') return false;
+  if (p.justDeployed || p.apLeft <= 0) return false;
+
+  // 奶妈：可指定己方残血棋子改为治疗
+  if (p.defId === 2 && t.owner === p.owner) {
+    if (t.hp >= t.maxHp) return false;
+    if (nearestDist(p, t) > p.range) return false;
+    snap();
+    p.apLeft--;
+    pushLog(S, `💉 奶妈为【${getDef(t.defId).name}】回复了 20 血量。`);
+    ev('attack', { uid: p.uid, tuid: t.uid, healMode: true });
+    await heal(S, t, 20);
+    return true;
+  }
+
+  if (!attackTargets(S, p).includes(t)) return false;
+  snap();
+  p.apLeft--;
+  await performAttack(S, p, t);
+  return true;
+}
+
+async function useSkill(uid) {
+  const p = pieceByUid(S, uid);
+  const sk = SKILLS[p.defId];
+  if (!p || !sk || p.owner !== S.curPlayer || S.phase !== 'action') return false;
+  if (p.justDeployed || p.apLeft <= 0 || !sk.usable(p)) return false;
+  const spec = sk.targetSpec(S, p);
+  let got = null;
+  if (spec.kind !== 'none') {
+    got = await ENV.choose(spec);
+    if (got == null) return false; // 玩家取消了
+  }
+  snap();
+  p.apLeft--;
+  await sk.exec(S, p, got);
+  await flushDeaths(S);
+  checkWin(S);
+  return true;
+}
+
+/* ═════════════ 对外 API ═════════════ */
+
+const API = {
+  async init(seed) {
+    newGame(seed);
+    S.curPlayer = rnd(S) < 0.5 ? 0 : 1;
+    pushLog(S, `🎲 天命所归：${PNAME[S.curPlayer]}执掌先行之权！`, 'l-impt');
+    await startTurnInternal();
+    return S;
+  },
+  state: () => S,
+  getDef,
+  spellTargets: SPELL_TARGETS,
+  canUndo,
+  async undo() {
+    if (!canUndo()) return false;
+    undo();
+    return true;
+  },
+  undoDepth: () => undoStack.length,
+
+  // 部署阶段
+  deployFollower,
+  discardUnplaceable,
+  storeHandSpell,
+  castHandSpell,
+  castStored,
+
+  // 行动阶段
+  doMove,
+  doAttack,
+  useSkill,
+  endTurn,
+
+  // 规则查询（供 UI 高亮）
+  rules: {
+    moveTargets: (p) => moveTargets(S, p),
+    attackTargets: (p) => attackTargets(S, p),
+    healTargets: (p) => healTargets(S, p),
+    deployCells: (defId, owner) => deployCells(S, defId, owner),
+    skillInfo: (p) => SKILLS[p.defId] || null,
+    effActions,
+    effRange: (p) => effRange(p),
+    bigCharge: (p) => p.charge,
+  },
+
+  // 表现层注入点（测试环境替换 choose）
+  env: ENV,
+};
+
+// 测试环境导出钩子（浏览器 IIFE 中 __HAOJIE_EXPORT__ 未定义则跳过）
+if (typeof __HAOJIE_EXPORT__ === 'function') __HAOJIE_EXPORT__(API);
+
+
+/* ═══════════════ fx.js · 特效引擎 ═══════════════
+ * 消费事件队列 EV，把逻辑层的每次动作翻译成动画。
+ * 所有动画返回 Promise，由 input 层 await 后再解锁输入。
+ * ═══════════════════════════════════════════════ */
+
+const FX = (() => {
+  let evCursor = 0;         // EV 已播放游标
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const waitFrame = () => new Promise((r) => requestAnimationFrame(r));
+
+  /** 格子几何：由 ui.js 在布局后调用 setMetrics 更新 */
+  let M = { size: 48, gap: 3, pad: 10, originX: 0, originY: 0 };
+  function setMetrics(m) { M = m; }
+
+  /** 格子中心相对 #board-outer 的像素坐标 */
+  function centerOf(x, y) {
+    return {
+      cx: M.pad + (x - 0.5) * (M.size + M.gap),
+      cy: M.pad + (H - y + 0.5) * (M.size + M.gap), // y=1 渲染在最下行
+    };
+  }
+  function boardOuter() { return document.getElementById('board-outer'); }
+
+  function addEl(cls, styles, text) {
+    const layer = document.getElementById('fxlayer');
+    const el = document.createElement('div');
+    el.className = cls;
+    if (text != null) el.textContent = text;
+    for (const k in styles) el.style[k] = styles[k];
+    layer.appendChild(el);
+    return el;
+  }
+
+  /* ─────────── 特效原语 ─────────── */
+
+  async function flyNum(uid, text, cls) {
+    const pEl = UI.pieceEl(uid);
+    const box = boardOuter().getBoundingClientRect();
+    const r = pEl ? pEl.getBoundingClientRect() : box;
+    const el = addEl('fly-num ' + cls, {
+      left: (r.left - box.left + r.width / 2) + 'px',
+      top: (r.top - box.top + r.height * 0.35) + 'px',
+    }, text);
+    await sleep(950);
+    el.remove();
+  }
+
+  /** 近战冲刺：攻击者扑向目标再弹回 */
+  async function lunge(pEl, tEl) {
+    const b = boardOuter().getBoundingClientRect();
+    const pr = pEl.getBoundingClientRect(), tr = tEl.getBoundingClientRect();
+    const dx = (tr.left + tr.width / 2) - (pr.left + pr.width / 2);
+    const dy = (tr.top + tr.height / 2) - (pr.top + pr.height / 2);
+    pEl.style.transition = 'transform .12s cubic-bezier(.5,0,.8,1)';
+    pEl.style.transform = `translate(${dx * 0.55}px, ${dy * 0.55}px) scale(1.08)`;
+    pEl.style.zIndex = 15;
+    await sleep(120);
+    // 斩击线
+    const ang = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+    const slash = addEl('slash', {
+      left: (pr.left - b.left + pr.width / 2 + dx * 0.25 - 26) + 'px',
+      top: (pr.top - b.top + pr.height / 2 + dy * 0.25 - 2) + 'px',
+      width: '52px', '--rot': ang + 'deg',
+    });
+    setTimeout(() => slash.remove(), 300);
+    pEl.style.transition = 'left .32s cubic-bezier(.34,1.3,.5,1), top .32s cubic-bezier(.34,1.3,.5,1), transform .22s';
+    pEl.style.transform = '';
+    setTimeout(() => { pEl.style.zIndex = ''; }, 350);
+    await sleep(160);
+  }
+
+  /** 远程弹道（棋子 → 棋子） */
+  async function projectile(fromUid, toUid, color, healMode) {
+    const pEl = UI.pieceEl(fromUid), tEl = UI.pieceEl(toUid);
+    if (!pEl || !tEl) return;
+    const b = boardOuter().getBoundingClientRect();
+    const pr = pEl.getBoundingClientRect(), tr = tEl.getBoundingClientRect();
+    const x1 = pr.left - b.left + pr.width / 2, y1 = pr.top - b.top + pr.height / 2;
+    const x2 = tr.left - b.left + tr.width / 2, y2 = tr.top - b.top + tr.height / 2;
+    await projectileTo(x1, y1, x2, y2, color);
+    if (!healMode) hitRing(toUid, color || '#f87171');
+  }
+
+  /** 远程弹道原语（像素坐标 → 像素坐标） */
+  async function projectileTo(x1, y1, x2, y2, color) {
+    const dist = Math.hypot(x2 - x1, y2 - y1);
+    const dur = Math.min(420, Math.max(140, dist * 1.4));
+    const bolt = addEl('bolt', { left: x1 + 'px', top: y1 + 'px', color: color || '#fbbf24' });
+    bolt.style.transition = `left ${dur}ms linear, top ${dur}ms linear`;
+    void bolt.offsetWidth;
+    bolt.style.left = x2 + 'px'; bolt.style.top = y2 + 'px';
+    await sleep(dur + 30);
+    bolt.remove();
+  }
+
+  function hitRing(uid, color) {
+    const tEl = UI.pieceEl(uid);
+    if (!tEl) return;
+    const r = tEl.getBoundingClientRect();
+    tEl.classList.remove('hit-jolt'); void tEl.offsetWidth; tEl.classList.add('hit-jolt');
+    const ring = addEl('ring', {
+      left: (r.left - boardOuter().getBoundingClientRect().left + r.width / 2) + 'px',
+      top: (r.top - boardOuter().getBoundingClientRect().top + r.height / 2) + 'px',
+      color,
+      '--ring-w': r.width * 1.7 + 'px',
+    });
+    setTimeout(() => ring.remove(), 600);
+  }
+
+  /** 爆炸粒子（爆弹/死亡等） */
+  function boomAt(px, py, color, n) {
+    for (let i = 0; i < (n || 8); i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const d = 24 + Math.random() * 42;
+      const b = addEl('boom', {
+        left: px + 'px', top: py + 'px', color,
+        background: color,
+        '--dx': Math.cos(ang) * d + 'px', '--dy': Math.sin(ang) * d + 'px',
+        width: 5 + Math.random() * 7 + 'px', height: 5 + Math.random() * 7 + 'px',
+      });
+      setTimeout(() => b.remove(), 750);
+    }
+  }
+
+  async function spellIcon(text, x, y) {
+    const { cx, cy } = centerOf(x, y);
+    const el = addEl('spell-cast', { left: cx + 'px', top: cy + 'px' }, text);
+    await sleep(750);
+    el.remove();
+  }
+
+  async function banner(text, cls) {
+    const el = document.getElementById('banner');
+    el.textContent = text;
+    el.className = cls || '';
+    await sleep(1050);
+    el.className = 'hidden';
+  }
+
+  function shake() {
+    document.body.classList.remove('shake');
+    void document.body.offsetWidth;
+    document.body.classList.add('shake');
+    setTimeout(() => document.body.classList.remove('shake'), 420);
+  }
+
+  /* ─────────── 事件 → 动画调度 ─────────── */
+
+  async function playNew() {
+    if (evCursor > EV.length) evCursor = 0; // 悔棋清空事件队列后重置游标
+    while (evCursor < EV.length) {
+      const e = EV[evCursor++];
+      try { await playOne(e); } catch (err) { console.error('fx error', e, err); }
+    }
+  }
+
+  async function playOne(e) {
+    switch (e.type) {
+      case 'turn': {
+        refreshTop(); // 回合横幅期间同步血条
+        await banner(`第 ${e.turn} 回合 · ${PNAME[e.player]}行动`, e.player === 0 ? 'b1' : 'b2');
+        break;
+      }
+      case 'deploy': {
+        UI.syncPieces(); // 新棋子 pop-in
+        break;
+      }
+      case 'move': {
+        UI.movePieceTo(e.uid, e.tx, e.ty);
+        await sleep(340);
+        break;
+      }
+      case 'hook': {
+        // 钩链飞向目标原位置 → 勾住拉回
+        const h = centerOf(e.fx, e.fy), t = centerOf(e.x0, e.y0);
+        await projectileTo(h.cx, h.cy, t.cx, t.cy, '#fda4af');
+        UI.movePieceTo(e.uid, e.tx, e.ty);
+        await sleep(340);
+        break;
+      }
+      case 'attack': {
+        const atkP = API.state().pieces.find((q) => q.uid === e.uid);
+        const tEl = UI.pieceEl(e.tuid);
+        if (!atkP || !tEl) break;
+        if (e.healMode) { await projectile(e.uid, e.tuid, '#34d399', true); break; }
+        const isRanged = nearestDist(
+          atkP,
+          API.state().pieces.find((q) => q.uid === e.tuid)
+        ) > 1;
+        UI.syncStatFlash(atkP.uid);
+        if (isRanged) await projectile(e.uid, e.tuid, '#fbbf24');
+        else await lunge(UI.pieceEl(e.uid), tEl);
+        break;
+      }
+      case 'damage': {
+        const st = API.state();
+        const victim = st.pieces.find((q) => q.uid === e.uid);
+        if (victim && !e.silentNum) {
+          await flyNum(e.uid, '-' + e.amount + (e.frontal ? '（正面）' : ''), e.crit ? 'crit' : 'dmg');
+          if (e.amount >= 60 || e.crit) shake();
+        }
+        break;
+      }
+      case 'heal': {
+        await flyNum(e.uid, '+' + e.amount, 'heal');
+        break;
+      }
+      case 'buff': {
+        await flyNum(e.uid, '▲ 强化', 'buff');
+        break;
+      }
+      case 'guard': {
+        const tEl = UI.pieceEl(e.uid);
+        if (tEl) {
+          const r = tEl.getBoundingClientRect();
+          boomAt(r.left - boardOuter().getBoundingClientRect().left + r.width / 2,
+                 r.top - boardOuter().getBoundingClientRect().top + r.height / 2,
+                 '#7dd3fc', 10);
+        }
+        await flyNum(e.uid, '🗡️ 名刀！', 'buff');
+        break;
+      }
+      case 'block': {
+        await flyNum(e.uid, '🛡️ 免疫', 'buff');
+        break;
+      }
+      case 'mark': {
+        await flyNum(e.uid, '🎯 引信', 'buff');
+        break;
+      }
+      case 'counter': {
+        await flyNum(e.uid, '🔄 反弹！', 'buff');
+        shake();
+        break;
+      }
+      case 'charm': {
+        await flyNum(e.uid, '🎭 倒戈！', 'buff');
+        shake();
+        UI.refreshAll();
+        break;
+      }
+      case 'death': {
+        const el = UI.pieceEl(e.uid);
+        if (el) {
+          const r = el.getBoundingClientRect();
+          const b = boardOuter().getBoundingClientRect();
+          boomAt(r.left - b.left + r.width / 2, r.top - b.top + r.height / 2, getDef(e.defId).type === 'base' ? '#fbbf24' : '#94a3b8', 12);
+          el.classList.add('dying');
+          await sleep(480);
+          el.remove();
+        }
+        if (getDef(e.defId).type === 'base') shake();
+        UI.syncPieces();
+        break;
+      }
+      case 'spell': {
+        const def = getDef(e.defId);
+        if (e.defId === 8) {
+          await spellIcon('💣', e.x + 0.5, e.y + 0.5);
+          // 田字四格（锚点为左上格）中心各炸一次
+          for (let dx = 0; dx <= 1; dx++) for (let dy = 0; dy <= 1; dy++) {
+            const { cx, cy } = centerOf(e.x + dx, e.y + dy);
+            boomAt(cx, cy, '#fb923c', 7);
+          }
+          shake();
+          await sleep(250);
+        } else if (e.uid != null) {
+          const icons = { 17: '🛡️', 18: '💀', 22: '🎭' };
+          await spellIcon(icons[e.defId] || def.emoji,
+            API.state().pieces.find((q) => q.uid === e.uid)?.x || W / 2,
+            API.state().pieces.find((q) => q.uid === e.uid)?.y || H / 2);
+        }
+        break;
+      }
+      case 'expire': break;
+      case 'win': {
+        showWinMask(e.winner);
+        break;
+      }
+      case 'phase': break;
+      default: break;
+    }
+  }
+
+  return { setMetrics, centerOf, playNew, flyNum, boomAt, banner, shake, projectile };
+})();
+
+
+/* ═══════════════ ui.js · 渲染层 ═══════════════
+ * 格子层：每次刷新全量重建（无状态、承载高亮）
+ * 棋子层：按 uid 做 DOM diff，位移交给 CSS transition 动画
+ * ══════════════════════════════════════════════ */
+
+/** 纯 UI 交互状态（不属于游戏状态、不入快照） */
+const UIST = {
+  mode: 'idle',      // idle | deployCard | pieceSel
+  cardIdx: null,     // deployCard：当前手牌索引
+  selUid: null,      // pieceSel：选中的己方棋子
+  inspectUid: null,  // 详情面板展示的棋子
+  choice: null,      // ENV.choose 进行中的 {spec, resolve}
+};
+
+const UI = (() => {
+  const pieceMap = new Map();   // uid → HTMLElement
+  let metrics = null;
+
+  const boardEl = () => document.getElementById('board');
+
+  /* ─────────── 几何 ─────────── */
+
+  function measure() {
+    const first = boardEl().querySelector('.cell');
+    if (!first) return null;
+    const size = first.offsetWidth;
+    const next = first.nextElementSibling;
+    const gap = next ? next.offsetLeft - first.offsetLeft - size : 3;
+    const pad = first.offsetLeft;
+    metrics = { size, gap, pad };
+    FX.setMetrics(metrics);
+    return metrics;
+  }
+
+  /** 棋子左上角像素位置 */
+  function posOf(x, y, big) {
+    const m = metrics || measure() || { size: 48, gap: 3, pad: 10 };
+    return {
+      left: m.pad + (x - 1) * (m.size + m.gap),
+      top: m.pad + (H - y - (big ? 1 : 0)) * (m.size + m.gap),
+    };
+  }
+
+  /* ─────────── 高亮计算 ─────────── */
+
+  function cellsOfPiece(p) {
+    return pieceCells(p).map((c) => c.x + ',' + c.y);
+  }
+
+  function computeHighlights() {
+    const hl = { dep: [], mv: [], atk: [], sk: [], heal: [], sel: [] };
+    const st = API.state();
+
+    // 法术/技能目标选择优先
+    if (UIST.choice && UIST.choice.spec) {
+      const spec = UIST.choice.spec;
+      if (spec.kind === 'cell') hl.sk = spec.cells.map((c) => c.x + ',' + c.y);
+      if (spec.kind === 'piece') {
+        for (const t of spec.pieces) hl.sk.push(...cellsOfPiece(t));
+      }
+      return hl;
+    }
+
+    if (UIST.mode === 'deployCard' && UIST.cardIdx != null) {
+      const card = st.hand[st.curPlayer][UIST.cardIdx];
+      if (card) hl.dep = API.rules.deployCells(card.defId, st.curPlayer).map((c) => c.x + ',' + c.y);
+      return hl;
+    }
+
+    if (UIST.mode === 'pieceSel' && UIST.selUid != null) {
+      const p = pieceByUid(st, UIST.selUid);
+      if (!p) return hl;
+      hl.sel = cellsOfPiece(p);
+      const canActNow = st.phase === 'action' && p.owner === st.curPlayer &&
+                        !p.justDeployed && p.apLeft > 0;
+      if (canActNow) {
+        if (p.defId === 5) {
+          if (p.charge > 0) hl.mv = API.rules.moveTargets(p).map((c) => c.x + ',' + c.y);
+        } else {
+          hl.mv = API.rules.moveTargets(p).map((c) => c.x + ',' + c.y);
+          for (const t of API.rules.attackTargets(p)) hl.atk.push(...cellsOfPiece(t));
+          if (p.defId === 2) for (const t of API.rules.healTargets(p)) hl.heal.push(...cellsOfPiece(t));
+        }
+      }
+    }
+    return hl;
+  }
+
+  /* ─────────── 格子层 ─────────── */
+
+  function renderCells() {
+    const hl = computeHighlights();
+    const set = (arr) => new Set(arr);
+    const S_dep = set(hl.dep), S_mv = set(hl.mv), S_atk = set(hl.atk),
+          S_sk = set(hl.sk), S_heal = set(hl.heal), S_sel = set(hl.sel);
+
+    const frag = document.createDocumentFragment();
+    for (let row = 1; row <= H; row++) {
+      for (let col = 1; col <= W; col++) {
+        const x = col, y = H - row + 1;   // y=1 固定渲染在最下行（蓝方阵地）
+        const c = document.createElement('div');
+        c.className = 'cell';
+        c.dataset.x = x; c.dataset.y = y;
+        const key = x + ',' + y;
+        const occ = pieceAt(API.state(), x, y);
+        if (occ && occ.defId === -1) c.classList.add('base-cell', occ.owner === 0 ? 'p1' : 'p2');
+        if (S_dep.has(key)) c.classList.add('dep-ok');
+        else {
+          if (S_mv.has(key)) c.classList.add('mv-ok');
+          if (S_atk.has(key)) c.classList.add('atk-ok');
+          if (S_heal.has(key)) c.classList.add('heal-ok');
+          if (S_sk.has(key)) c.classList.add('sk-ok');
+        }
+        if (S_sel.has(key)) c.classList.add('sel-hl');
+        frag.appendChild(c);
+      }
+    }
+    const el = boardEl();
+    el.innerHTML = '';
+    el.appendChild(frag);
+  }
+
+  /* ─────────── 棋子层 ─────────── */
+
+  function buildPieceEl(p) {
+    const def = getDef(p.defId);
+    const el = document.createElement('div');
+    el.className = 'piece pop-in';
+    el.dataset.uid = p.uid;
+    el.innerHTML =
+      `<div class="face">${def.emoji}</div>` +
+      `<span class="stat atk"></span><span class="stat hp"></span>` +
+      `<div class="badges"></div><div class="apdots"></div>`;
+    setTimeout(() => el.classList.remove('pop-in'), 500);
+    return el;
+  }
+
+  function syncStatsOf(p, el) {
+    const def = getDef(p.defId);
+    const atkEl = el.querySelector('.stat.atk'), hpEl = el.querySelector('.stat.hp');
+    if (p.defId < 0) { atkEl.style.display = 'none'; }
+    else { atkEl.style.display = ''; atkEl.textContent = effAtk(p); }
+    hpEl.textContent = Math.max(0, Math.round(p.hp));
+    hpEl.parentElement.classList.toggle('hurt', p.hp <= p.maxHp * 0.35);
+
+    // 徽标
+    const badges = [];
+    if (p.charge > 0) badges.push('⚡' + p.charge);
+    if (p.reaperTo && API.state().turnCounter === p.reaperFrom) badges.push('💀');
+    if (p.charmTo && API.state().turnCounter >= p.charmFrom && API.state().turnCounter < p.charmTo) badges.push('🎭');
+    el.querySelector('.badges').textContent = badges.join('');
+
+    // 行动点
+    const apBox = el.querySelector('.apdots');
+    const st = API.state();
+    const mine = p.owner === st.curPlayer && st.phase !== 'over';
+    const total = effActions(p);
+    if (mine && !p.justDeployed && total > 0 && st.phase === 'action') {
+      let html = '';
+      for (let i = 0; i < total; i++) html += `<span class="apdot ${i < p.apLeft ? '' : 'spent'}"></span>`;
+      apBox.innerHTML = html;
+    } else apBox.innerHTML = '';
+
+    // 状态外观
+    el.classList.toggle('exhausted',
+      (p.owner === st.curPlayer && st.phase === 'action' && (p.justDeployed || (p.apLeft <= 0 && total > 0))) ||
+      def.type === 'grave');
+    el.classList.toggle('shielded', !!p.shieldUntil && p.shieldUntil > st.turnCounter);
+    el.classList.toggle('marked', !!p.mark10);
+    el.classList.toggle('reapered', !!p.reaperTo && p.reaperFrom <= st.turnCounter);
+    el.classList.toggle('charmed', !!p.charmTo && p.charmFrom <= st.turnCounter && p.charmTo > st.turnCounter);
+    el.classList.toggle('charged', p.charge >= 2);
+    el.classList.toggle('buffed', p.atkBuffs.length > 0);
+    el.classList.toggle('selected', UIST.mode === 'pieceSel' && UIST.selUid === p.uid);
+    void def;
+  }
+
+  /** 棋子层 diff：新建 / 更新 / 移除。
+   *  棋子挂在 #board-outer 上（而非 #board 内），这样格子层
+   *  的 innerHTML 重建不会连带清掉棋子 DOM。 */
+  function syncPieces() {
+    const st = API.state();
+    const host = document.getElementById('board-outer');
+    const alive = new Set();
+    for (const p of st.pieces) {
+      if (p.dead) continue;
+      alive.add(p.uid);
+      let el = pieceMap.get(p.uid);
+      if (!el) {
+        el = buildPieceEl(p);
+        pieceMap.set(p.uid, el);
+        host.appendChild(el);
+      }
+      const pos = posOf(p.x, p.y, p.big);
+      el.style.left = pos.left + 'px';
+      el.style.top = pos.top + 'px';
+      el.classList.toggle('own0', p.owner === 0);
+      el.classList.toggle('own1', p.owner === 1);
+      el.classList.toggle('big5', !!p.big);
+      syncStatsOf(p, el);
+    }
+    for (const [uid, el] of pieceMap) {
+      if (!alive.has(uid)) { el.remove(); pieceMap.delete(uid); }
+    }
+  }
+
+  function movePieceTo(uid, x, y) {
+    const p = pieceByUid(API.state(), uid);
+    const el = pieceMap.get(uid);
+    if (!p || !el) return;
+    const pos = posOf(x, y, p.big);
+    el.style.left = pos.left + 'px';
+    el.style.top = pos.top + 'px';
+  }
+
+  function pieceEl(uid) { return pieceMap.get(uid) || null; }
+
+  /* ─────────── 右侧面板 ─────────── */
+
+  function statLine(def) {
+    if (def.type === 'spell') return `<span>🧪 法术</span><span>⏳ 储存 ${def.limit} 回合</span>`;
+    return `<span>⚔️ <b>${def.atk}</b></span><span>❤️ <b>${def.hp}</b></span>` +
+           `<span>🎯 <b>${def.rng}</b></span><span>⚡ <b>${def.acts}</b></span><span>👟 <b>${def.mv}</b></span>`;
+  }
+
+  function renderHand() {
+    const st = API.state();
+    const box = document.getElementById('hand');
+    box.innerHTML = '';
+    if (st.phase === 'over') { box.innerHTML = '<div class="empty-hint">战斗已结束</div>'; return; }
+    const cards = st.hand[st.curPlayer] || [];
+    if (st.phase === 'action' && cards.length === 0) {
+      box.innerHTML = '<div class="empty-hint">本回合召唤已全部处理完毕</div>';
+      return;
+    }
+    cards.forEach((card, idx) => {
+      const def = getDef(card.defId);
+      const el = document.createElement('div');
+      const isSelected = UIST.mode === 'deployCard' && UIST.cardIdx === idx;
+      el.className = 'card' + (def.type === 'spell' ? ' spell-card' : '') +
+                     (isSelected ? ' selected' :
+                      (st.phase === 'deploy' ? ' awaiting' : ''));
+      el.dataset.idx = idx;
+
+      let extra = '';
+      if (def.type === 'follower') {
+        const n = API.rules.deployCells(card.defId, st.curPlayer).length;
+        if (n === 0) extra = '<div class="card-btns"><button class="mini-btn" data-discard="' + idx + '">⚠️ 无处部署 · 弃置</button></div>';
+      } else {
+        extra =
+          `<div class="card-btns">` +
+          `<button class="mini-btn purple" data-cast="${idx}">✨ 释放</button>` +
+          `<button class="mini-btn gold" data-store="${idx}">🧪 储存</button></div>`;
+      }
+
+      el.innerHTML =
+        (def.type === 'spell' ? `<span class="c-limit">⏳${def.limit}回合</span>` : '') +
+        `<div class="c-head"><span class="c-emoji">${def.emoji}</span><span class="c-name">${def.name}</span></div>` +
+        `<div class="c-stats">${statLine(def)}</div>` +
+        `<div class="c-desc">${def.short}</div>` + extra;
+      box.appendChild(el);
+    });
+  }
+
+  function renderStored() {
+    const st = API.state();
+    const box = document.getElementById('stored');
+    box.innerHTML = '';
+    const arr = st.stored[st.curPlayer] || [];
+    if (!arr.length) { box.innerHTML = '<div class="empty-hint">空空如也</div>'; return; }
+    arr.forEach((card, idx) => {
+      const def = getDef(card.defId);
+      const el = document.createElement('div');
+      el.className = 'card spell-card';
+      el.innerHTML =
+        `<span class="c-limit">⏳剩 ${card.remain} 回合</span>` +
+        `<div class="c-head"><span class="c-emoji">${def.emoji}</span><span class="c-name">${def.name}</span></div>` +
+        `<div class="c-desc">${def.short}</div>` +
+        (st.phase === 'action'
+          ? `<div class="card-btns"><button class="mini-btn purple" data-cast-stored="${idx}">✨ 释放</button></div>`
+          : '');
+      box.appendChild(el);
+    });
+  }
+
+  function statusText(p) {
+    const st = API.state();
+    const parts = [];
+    if (p.charge > 0) parts.push(`⚡蓄力 ${p.charge}`);
+    if (p.skillUses > 0) parts.push(`🔋已强化 ${p.skillUses}/3`);
+    if (p.killCount > 0) parts.push(`🔪击杀 ${p.killCount}`);
+    if (p.shieldUntil > st.turnCounter) parts.push('🛡️金身');
+    if (p.mark10) parts.push('🎯引信标记');
+    if (p.reaperTo && p.reaperFrom <= st.turnCounter) parts.push('💀斩杀之刃');
+    if (p.charmTo && p.charmFrom <= st.turnCounter) parts.push('🎭策反陷阱');
+    if (p.guardUsed) parts.push('🗡️守护已耗尽');
+    if (p.diesAt) parts.push(`⏳${Math.max(0, p.diesAt - st.turnCounter)} 回合后消散`);
+    if (p.justDeployed) parts.push('💤部署当回合，尚待苏醒');
+    return parts.length ? `<div class="i-desc">${parts.join(' · ')}</div>` : '';
+  }
+
+  function renderInspect() {
+    const box = document.getElementById('inspect');
+    const p = UIST.inspectUid != null ? pieceByUid(API.state(), UIST.inspectUid) : null;
+    if (!p) { box.innerHTML = '<div class="empty-hint">暂无选中棋子</div>'; return; }
+    const def = getDef(p.defId);
+    box.innerHTML =
+      `<div class="i-head"><span class="i-emoji">${def.emoji}</span>` +
+      `<span class="i-name">${def.name}</span>` +
+      (def.type === 'grave' ? '' :
+        `<span class="i-owner o${p.owner}">${PNAME[p.owner]}</span>`) +
+      `</div>` +
+      `<div class="i-stats">${statLine(def)}<span>📍 <b>${p.x},${p.y}</b></span>` +
+      `<span>❤️ <b>${Math.max(0, Math.round(p.hp))}/${p.maxHp}</b></span></div>` +
+      statusText(p) +
+      `<div class="i-desc">${def.desc}</div>`;
+  }
+
+  function renderSkillbox() {
+    const box = document.getElementById('skillbox');
+    box.innerHTML = '';
+    const st = API.state();
+    if (st.phase !== 'action' || UIST.mode !== 'pieceSel' || UIST.selUid == null) return;
+    const p = pieceByUid(st, UIST.selUid);
+    if (!p || p.owner !== st.curPlayer || p.justDeployed || p.apLeft <= 0) return;
+
+    // 大肉比蓄势按钮
+    if (p.defId === 5 && p.charge <= 0) {
+      box.innerHTML = '<button class="btn-move" data-act="brace">🐘 蓄势（下次移动才会真正挪动）</button>';
+      return;
+    }
+    // 技能按钮
+    const sk = API.rules.skillInfo(p);
+    if (sk && sk.usable(p)) {
+      box.innerHTML = `<button class="btn-skill" data-act="skill">${sk.label}</button>`;
+    }
+  }
+
+  function refreshTop() {
+    const st = API.state();
+    const b0 = st.pieces.find((q) => !q.dead && q.defId === -1 && q.owner === 0);
+    const b1 = st.pieces.find((q) => !q.dead && q.defId === -1 && q.owner === 1);
+    if (!b0 || !b1) return; // 基地缺失（异常/特殊场景）时不动血条
+    const f0 = Math.max(0, b0.hp) / BASE_HP * 100;
+    const f1 = Math.max(0, b1.hp) / BASE_HP * 100;
+    document.getElementById('hp-p1').style.width = f0 + '%';
+    document.getElementById('hp-p2').style.width = f1 + '%';
+    document.getElementById('hp-p1-text').textContent = `🏰 基地 ${Math.max(0, Math.round(b0.hp))}/${BASE_HP}`;
+    document.getElementById('hp-p2-text').textContent = `${Math.max(0, Math.round(b1.hp))}/${BASE_HP} 基地 🏰`;
+    document.getElementById('turn-num').textContent = `回合 ${st.turnCounter}`;
+    document.getElementById('turn-owner').textContent =
+      st.winner != null ? `🏆 ${PNAME[st.winner]}获胜` : `${PNAME[st.curPlayer]}行动中`;
+    document.getElementById('side-p1').classList.toggle('active', st.curPlayer === 0 && st.winner == null);
+    document.getElementById('side-p2').classList.toggle('active', st.curPlayer === 1 && st.winner == null);
+  }
+
+  function renderPhaseHint() {
+    const st = API.state();
+    const el = document.getElementById('phasehint');
+    if (st.winner != null) { el.textContent = '🏆 战斗结束！点击「重开」再来一局。'; return; }
+    if (UIST.choice && UIST.choice.spec && UIST.choice.spec.hint) {
+      el.textContent = '👆 ' + UIST.choice.spec.hint;
+      return;
+    }
+    if (st.phase === 'deploy') {
+      el.textContent = '📜 部署阶段：处理手中的召唤卡（随从必须放置 / 法术可释放或储存）';
+    } else {
+      el.textContent = '⚔️ 行动阶段：点击己方棋子下达指令（移动 / 攻击 / 技能），或结束回合';
+    }
+  }
+
+  function renderLog() {
+    const st = API.state();
+    const box = document.getElementById('log');
+    const tail = st.log.slice(-70);
+    box.innerHTML = tail.map((l) => `<div class="${l.cls}">${l.msg}</div>`).join('');
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function renderBtns() {
+    const st = API.state();
+    document.getElementById('btn-end').disabled = busy || st.phase !== 'action' || st.winner != null;
+    document.getElementById('btn-undo').disabled = busy || !canUndo() || st.winner != null;
+    document.getElementById('btn-restart').disabled = busy;
+  }
+
+  function renderPanel() {
+    refreshTop();
+    renderPhaseHint();
+    renderHand();
+    renderStored();
+    renderInspect();
+    renderSkillbox();
+    renderBtns();
+    renderLog();
+  }
+
+  function refreshAll() {
+    renderCells();   // 先重建格子
+    measure();       // 再测量真实格距（棋子定位依赖它）
+    syncPieces();
+    renderPanel();
+  }
+
+  return { measure, posOf, renderCells, syncPieces, movePieceTo, pieceEl,
+           syncStatFlash: (uid) => {
+             const p = pieceByUid(API.state(), uid);
+             const el = pieceMap.get(uid);
+             if (p && el) syncStatsOf(p, el);
+           },
+           refreshAll, renderPanel };
+})();
+
+/** 供 fx.js 调用的顶层便捷函数 */
+function refreshTop() { UI.renderPanel(); }
+
+
+/* ═══════════════ input.js · 交互状态机 ═══════════════
+ * 核心节奏：act(fn) 加锁 → 执行逻辑 → 播放动画 → 解锁刷新。
+ * ENV.choose 在这里落地为「高亮 + 等待点击」的 Promise。
+ * ════════════════════════════════════════════════════ */
+
+let busy = false;
+
+/** 动作统一入口：加锁执行 → 播事件动画 → 解锁全刷 */
+async function act(fn) {
+  if (busy) return;
+  busy = true;
+  UI.renderPanel();
+  try {
+    await fn();
+    await FX.playNew();
+  } catch (err) {
+    console.error(err);
+    toast('操作出错啦：' + err.message, true);
+  } finally {
+    busy = false;
+    UIST.mode = 'idle';
+    UIST.cardIdx = null;
+    UIST.selUid = null;
+    UI.refreshAll();
+  }
+}
+
+/* ─────────── 目标选择（ENV.choose 落地） ─────────── */
+
+function ask(spec) {
+  if (spec.kind === 'none') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    UIST.choice = { spec, resolve };
+    UI.refreshAll();
+    if (spec.kind === 'option') mountOptionFloat(spec);
+  });
+}
+
+function finishChoice(val) {
+  const c = UIST.choice;
+  UIST.choice = null;
+  unmountOptionFloat();
+  if (c) c.resolve(val);
+  else UI.refreshAll();
+}
+
+function mountOptionFloat(spec) {
+  unmountOptionFloat();
+  const wrap = document.createElement('div');
+  wrap.id = 'optfloat';
+  const title = document.createElement('div');
+  title.className = 'of-title';
+  title.textContent = spec.hint || '请选择';
+  wrap.appendChild(title);
+  for (const opt of spec.options) {
+    const b = document.createElement('button');
+    b.className = 'of-btn';
+    b.textContent = opt.label;
+    b.onclick = () => finishChoice(opt.value);
+    wrap.appendChild(b);
+  }
+  if (spec.cancelable) {
+    const c = document.createElement('button');
+    c.className = 'of-cancel';
+    c.textContent = '取消';
+    c.onclick = () => finishChoice(null);
+    wrap.appendChild(c);
+  }
+  document.body.appendChild(wrap);
+}
+function unmountOptionFloat() {
+  const old = document.getElementById('optfloat');
+  if (old) old.remove();
+}
+
+/* ─────────── 点击解析 ─────────── */
+
+function tryResolveChoiceByCell(x, y) {
+  const spec = UIST.choice && UIST.choice.spec;
+  if (!spec) return false;
+  if (spec.kind === 'cell' && spec.cells.some((c) => c.x === x && c.y === y)) {
+    finishChoice({ x, y });
+    return true;
+  }
+  if (spec.kind === 'piece') {
+    const occ = pieceAt(API.state(), x, y);
+    if (occ && spec.pieces.includes(occ)) { finishChoice(occ); return true; }
+  }
+  return true; // 选择模式下吞掉其它点击
+}
+
+function tryResolveChoiceByPiece(p) {
+  const spec = UIST.choice && UIST.choice.spec;
+  if (!spec) return false;
+  if (spec.kind === 'piece' && spec.pieces.includes(p)) { finishChoice(p); return true; }
+  return true;
+}
+
+/** 格子被点击。
+ *  注意：目标选择（choice）期间 busy 也是 true——此时必须放行，
+ *  否则 choose 的 Promise 永远等不到点击，会造成死锁。 */
+function onCellClick(x, y) {
+  if (UIST.choice) { tryResolveChoiceByCell(x, y); return; }
+  if (busy) return;
+  const st = API.state();
+
+  // 部署阶段
+  if (st.phase === 'deploy' && UIST.mode === 'deployCard' && UIST.cardIdx != null) {
+    const idx = UIST.cardIdx;
+    act(() => API.deployFollower(idx, x, y));
+    return;
+  }
+
+  // 行动阶段：对已选棋子下达指令
+  if (st.phase === 'action' && UIST.mode === 'pieceSel' && UIST.selUid != null) {
+    const key = x + ',' + y;
+    const p = pieceByUid(st, UIST.selUid);
+    if (!p) return;
+    const mv = API.rules.moveTargets(p).some((c) => c.x === x && c.y === y);
+    if (mv && !(p.defId === 5 && p.charge <= 0)) {
+      act(() => API.doMove(UIST.selUid, x, y));
+      return;
+    }
+    const occ = pieceAt(st, x, y);
+    if (occ && occ !== p) {
+      const isAtk = API.rules.attackTargets(p).includes(occ);
+      const isHeal = p.defId === 2 && occ.owner === p.owner &&
+                     API.rules.healTargets(p).includes(occ);
+      if (isAtk || isHeal) {
+        act(() => API.doAttack(UIST.selUid, occ.uid));
+        return;
+      }
+    }
+  }
+}
+
+/** 棋子被点击 */
+function onPieceClick(p) {
+  if (UIST.choice) { tryResolveChoiceByPiece(p); return; }
+  if (busy) return;
+  const st = API.state();
+  UIST.inspectUid = p.uid;
+
+  if (st.winner != null) { UI.renderPanel(); return; }
+
+  // ── 已选中己方棋子时：点敌方红框棋子＝发起攻击；点残血友方绿框棋子＝治疗。
+  //    （必须在此解析：敌方棋子 DOM 盖在格子上，点它不会经过 onCellClick）
+  if (st.phase === 'action' && UIST.mode === 'pieceSel' && UIST.selUid != null &&
+      UIST.selUid !== p.uid) {
+    const sel = pieceByUid(st, UIST.selUid);
+    if (sel && sel.owner === st.curPlayer && !sel.justDeployed && sel.apLeft > 0) {
+      const isAtk = p.owner !== st.curPlayer && API.rules.attackTargets(sel).includes(p);
+      const isHeal = sel.defId === 2 && p.owner === sel.owner &&
+                     API.rules.healTargets(sel).includes(p);
+      if (isAtk || isHeal) {
+        const uid = sel.uid;
+        act(() => API.doAttack(uid, p.uid));
+        return;
+      }
+    }
+  }
+
+  if (p.owner === st.curPlayer && st.phase === 'action') {
+    if (p.justDeployed) {
+      toast('💤 刚部署的棋子本回合还在热身，下回合才能行动（冲锋怪可以选择冲锋立即行动哦）');
+    } else if (p.apLeft <= 0) {
+      toast('⚡ 这枚棋子本回合的行动点已经用完了');
+    }
+  }
+
+  // 点自己的可行动棋子 → 进入指挥模式
+  if (p.owner === st.curPlayer &&
+      ((st.phase === 'action' && !p.justDeployed && p.apLeft > 0) ||
+       st.phase === 'deploy')) {
+    UIST.mode = 'pieceSel';
+    UIST.selUid = p.uid;
+  } else if (UIST.mode === 'pieceSel' && UIST.selUid !== p.uid) {
+    UIST.mode = 'idle';
+    UIST.selUid = null;
+  }
+  UI.refreshAll();
+}
+
+/* ─────────── DOM 事件绑定 ─────────── */
+
+function bindEvents() {
+  // 棋盘：棋子挂在 #board-outer 上（避免被格子层重建清除），
+  // 因此监听器必须绑在外层容器才能同时接住棋子与格子的点击
+  document.getElementById('board-outer').addEventListener('click', (e) => {
+    const pel = e.target.closest('.piece');
+    if (pel) {
+      const p = pieceByUid(API.state(), Number(pel.dataset.uid));
+      if (p) { onPieceClick(p); return; }
+    }
+    const cel = e.target.closest('.cell');
+    if (cel) onCellClick(Number(cel.dataset.x), Number(cel.dataset.y));
+  });
+
+  // 手牌 / 储存栏（事件委托）
+  document.getElementById('hand').addEventListener('click', (e) => {
+    const btn = e.target;
+    const st = API.state();
+    if (btn.dataset.cast != null) {
+      const idx = Number(btn.dataset.cast);
+      runSpellCast(() => getHandSpec(idx), (got) => API.castHandSpell(idx, got));
+      return;
+    }
+    if (btn.dataset.store != null) {
+      act(() => API.storeHandSpell(Number(btn.dataset.store)));
+      return;
+    }
+    if (btn.dataset.discard != null) {
+      act(() => API.discardUnplaceable(Number(btn.dataset.discard)));
+      return;
+    }
+    // 卡片本体：随从卡切换部署模式
+    const cardEl = btn.closest('.card');
+    if (!cardEl || !cardEl.dataset.idx) return;
+    const idx = Number(cardEl.dataset.idx);
+    const card = st.hand[st.curPlayer][idx];
+    if (!card || getDef(card.defId).type === 'spell') return;
+    if (UIST.mode === 'deployCard' && UIST.cardIdx === idx) {
+      UIST.mode = 'idle'; UIST.cardIdx = null;
+    } else {
+      UIST.mode = 'deployCard'; UIST.cardIdx = idx;
+    }
+    UI.refreshAll();
+  });
+
+  document.getElementById('stored').addEventListener('click', (e) => {
+    if (e.target.dataset.castStored != null) {
+      const idx = Number(e.target.dataset.castStored);
+      runSpellCast(() => {
+        const card = API.state().stored[API.state().curPlayer][idx];
+        return SPELL_TARGETS[card.defId](API.state(), API.state().curPlayer);
+      }, (got) => API.castStored(idx, got));
+    }
+  });
+
+  // 技能框
+  document.getElementById('skillbox').addEventListener('click', (e) => {
+    if (e.target.dataset.act === 'brace') {
+      const p = pieceByUid(API.state(), UIST.selUid);
+      if (p) act(() => API.doMove(p.uid, p.x, p.y)); // 大肉比蓄势
+    } else if (e.target.dataset.act === 'skill') {
+      const uid = UIST.selUid;
+      act(() => API.useSkill(uid));
+    }
+  });
+}
+
+/** 法术通用流程：先选目标，再执行 */
+async function runSpellCast(getSpec, run) {
+  if (busy) return;
+  busy = true;
+  try {
+    const spec = getSpec();
+    const got = await ask(spec);
+    if (got == null) { busy = false; UI.refreshAll(); return; }
+    await run(got);
+    await FX.playNew();
+  } catch (err) {
+    console.error(err);
+    toast('施法失败：' + err.message, true);
+  } finally {
+    busy = false;
+    UIST.choice = null;
+    unmountOptionFloat();
+    UIST.mode = 'idle'; UIST.cardIdx = null; UIST.selUid = null;
+    UI.refreshAll();
+  }
+}
+
+function getHandSpec(idx) {
+  const st = API.state();
+  const card = st.hand[st.curPlayer][idx];
+  return SPELL_TARGETS[card.defId](st, st.curPlayer);
+}
+
+// 注入逻辑层的选择器
+ENV.choose = ask;
+
+
+/* ═══════════════ codex.js · 图鉴 & 规则 ═══════════════ */
+
+function openModal(tab) {
+  document.getElementById('modal').classList.remove('hidden');
+  switchTab(tab || 'codex');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.add('hidden');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.mtab').forEach((b) =>
+    b.classList.toggle('active', b.dataset.tab === tab));
+  if (tab === 'codex') renderCodex();
+  else renderRulesDoc();
+}
+
+function renderCodex() {
+  const body = document.getElementById('modal-body');
+  const cards = DEFS.map((def) => {
+    const isSpell = def.type === 'spell';
+    return `
+      <div class="cx-card ${isSpell ? 'spell' : ''}">
+        <div class="cx-head">
+          <span class="cx-idx">${String(def.id).padStart(2, '0')}</span>
+          <span class="cx-emoji">${def.emoji}</span>
+          <span class="cx-name">${def.name}</span>
+          <span class="cx-type ${isSpell ? 'spell-t' : 'follower'}">${isSpell ? '法术' : '随从'}</span>
+        </div>
+        ${isSpell
+          ? `<div class="cx-stats"><span>⏳ 储存限制 <b>${def.limit}</b> 回合</span></div>`
+          : `<div class="cx-stats">
+               <span>⚔️ 攻击 <b>${def.atk}</b></span><span>❤️ 血量 <b>${def.hp}</b></span>
+               <span>🎯 射程 <b>${def.rng}</b></span><span>⚡ 行动 <b>${def.acts}</b></span>
+               <span>👟 移速 <b>${def.mv}</b></span>
+             </div>`}
+        <div class="cx-desc">${def.desc}</div>
+      </div>`;
+  }).join('');
+  const extra = [-1, -2, -3, 33].map((id) => {
+    const def = getDef(id);
+    return `
+      <div class="cx-card spell">
+        <div class="cx-head">
+          <span class="cx-emoji">${def.emoji}</span>
+          <span class="cx-name">${def.name}</span>
+          <span class="cx-type follower">衍生</span>
+        </div>
+        <div class="cx-desc">${def.desc}</div>
+      </div>`;
+  }).join('');
+  body.innerHTML =
+    `<div class="rules-doc" style="margin-bottom:12px">
+       💡 五维数字依次为 <b>攻击 / 血量 / 攻击范围 / 一回合行动次数 / 一回合移动格数</b>。
+       距离按曼哈顿距离（横竖步数之和）计算。点击棋盘上的棋子可在对局中随时查看详情。
+     </div>
+     <div class="codex-grid">${cards}${extra}</div>`;
+}
+
+function renderRulesDoc() {
+  document.getElementById('modal-body').innerHTML = `
+  <div class="rules-doc">
+    <h3>🏰 胜负目标</h3>
+    双方基地位于 (5,1) 与 (5,13)，各有 <b>300 血量</b>。率先摧毁对方基地者获胜。
+
+    <h3>🗺️ 战场与部署</h3>
+    <ul>
+      <li>战场为 <b>9 列 × 13 行</b> 共 117 格，坐标 (x,y) 表示第 x 列第 y 行；蓝方阵地在下（y=1 侧），红方在上（y=13 侧）。</li>
+      <li>蓝方初始可部署于 <b>第 1～8 行</b>，红方为 <b>第 6～13 行</b>，第 6～8 行是双方争夺的中间地带。</li>
+      <li><b>推进许可</b>：回合开始时，若某条本不可部署的行中己方棋子数 ≥ 对方该行棋子数 + 2，本回合即可在该行部署。</li>
+      <li>所有“格数”（射程、移程）均按<b>曼哈顿距离</b>（横竖步数之和）计算。</li>
+    </ul>
+
+    <h3>🎴 召唤与手牌</h3>
+    <ul>
+      <li>每个回合开始时从 26 种棋子库中<b>随机抽取 2 张</b>。</li>
+      <li><b>随从类</b>必须在本回合内部署；若战场无处安放则被迫弃置。</li>
+      <li><b>法术类</b>可当回合立即释放，也可存入储存栏，在储存期限内任意己方回合释放；期限耗尽自动销毁。</li>
+      <li>刚部署的随从当回合不能行动（拥有【冲锋】的除外），从下个回合开始正常行动。</li>
+    </ul>
+
+    <h3>⚔️ 指令与行动</h3>
+    <ul>
+      <li>每次轮到己方回合，每枚可用棋子获得等于其「一回合行动次数」的行动点。</li>
+      <li>每消耗 1 点行动点，可从<b>移动 / 攻击 / 技能</b>中选择一项执行（未标注技能的棋子只有前两项）。</li>
+      <li><b>攻击</b>：选择攻击范围内（≤ 射程）的敌方单位造成等同于攻击力的伤害。</li>
+      <li><b>穿透规则</b>：若通往某个敌方单位的、长度不超过射程的所有路径都被其他敌方棋子封死，则无法越过它们攻击更远的目标——敌方棋子会挡住弹道，友方不会。</li>
+      <li><b>移动</b>：移动不超过自身移速的格数，不能穿过任何棋子。</li>
+    </ul>
+
+    <h3>↩ 悔棋</h3>
+    点击「悔棋」可以撤销最近一次操作（包括部署、攻击、施法甚至结束回合），可连续撤销至开局。两人线下对弈时请自觉遵守约定哦～
+
+    <h3>📖 查看信息</h3>
+    <ul>
+      <li>点击场上任意棋子可在右侧面板查看完整数值与状态说明。</li>
+      <li>顶部按钮可打开<b>图鉴</b>查阅全部 26 种棋子。</li>
+    </ul>
+
+    <h3>⚖️ 规则裁定说明（实现口径）</h3>
+    <ul>
+      <li>原文距离公式 |Δx+Δy| 在同反对角线上恒为 0，会产生免费瞬移，经确认改用曼哈顿距离。</li>
+      <li>名刀「刀魂」形态的 n 统计以其为中心 3×3 内双方所有随从（含自身），实时波动。</li>
+      <li>定炮蓄力 ≥2 即可开炮，开炮清空蓄力；蓄力恰满 5 格的那一炮射程 +1。</li>
+      <li>投石机标记在「被标记者回满血」或「再次被标记方另一枚非投石机棋子命中」时引爆 5 点伤害，标记持续到拥有者的下回合开始。</li>
+      <li>BUFF怪 的 +10 攻击覆盖到你的下个行动回合。</li>
+      <li>死吧！的即死对基地无效，金身可以抵挡；策反收编的是造成伤害的敌方随从（基地不会倒戈），其当回合剩余行动作废。</li>
+      <li>厚脸皮的正面＝从前线方向（远离己方基地一侧）袭来的攻击；背后偷袭全额。</li>
+      <li>重铸召唤抽到法术时会自动存入储存栏，不浪费。</li>
+    </ul>
+  </div>`;
+}
+
+/* ─────────── toast 提示 ─────────── */
+
+function toast(msg, warn) {
+  const box = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = 'toast-item' + (warn ? ' warn' : '');
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+
+/* ═══════════════ main.js · 入口装配 ═══════════════ */
+
+/** 胜利遮罩（fx.js 的 win 事件调用） */
+function showWinMask(winner) {
+  let mask = document.getElementById('winmask');
+  if (!mask) {
+    mask = document.createElement('div');
+    mask.id = 'winmask';
+    mask.innerHTML =
+      `<div id="win-text"></div><div id="win-sub">基地化为废墟，浩劫落幕</div>` +
+      `<button class="btn btn-primary" onclick="location.reload()">⟳ 再来一局</button>` +
+      `<button class="btn" id="win-review">🔍 复盘战场</button>`;
+    document.body.appendChild(mask);
+    document.getElementById('win-review').onclick = () => {
+      mask.classList.add('hidden');
+      UI.refreshAll();
+    };
+  }
+  const t = document.getElementById('win-text');
+  t.textContent = `${PNAME[winner]}获胜！`;
+  t.className = winner === 0 ? 'w1' : 'w2';
+  FX.banner(`${PNAME[winner]}胜利！`, 'bwin');
+}
+
+/* ─────────── 启动 ─────────── */
+
+async function boot() {
+  bindTopButtons();
+  bindEvents();   // 棋盘 / 手牌 / 储存栏 / 技能框的点击委托
+  await API.init((Math.random() * 0xffffffff) >>> 0);
+  UI.refreshAll();
+
+  // 调试/自动化测试钩子（不影响正常游玩）
+  if (typeof window !== 'undefined') {
+    window.__HJ_DEBUG__ = { api: API, ui: UI, uist: UIST };
+  }
+
+  // 首次进入自动展示一次规则提示
+  toast('欢迎来到「浩劫」！首次游玩建议先读一读 📐 规则 哦～');
+}
+
+function bindTopButtons() {
+  document.getElementById('btn-end').onclick = () => act(() => API.endTurn());
+  document.getElementById('btn-undo').onclick = async () => {
+    if (busy) return;
+    if (await API.undo()) { UI.refreshAll(); toast('↩ 已撤销上一步'); }
+  };
+  document.getElementById('btn-codex').onclick = () => openModal('codex');
+  document.getElementById('btn-rules').onclick = () => openModal('rules');
+  document.getElementById('btn-restart').onclick = () => {
+    if (confirm('确定要重新开始吗？当前对局将丢失。')) location.reload();
+  };
+
+  // 模态框
+  document.getElementById('modal-close').onclick = closeModal;
+  document.getElementById('modal').addEventListener('click', (e) => {
+    if (e.target.id === 'modal') closeModal();
+  });
+  document.querySelectorAll('.mtab').forEach((b) => {
+    b.onclick = () => switchTab(b.dataset.tab);
+  });
+
+  // 快捷键：Esc 取消选择/关闭弹窗；U 悔棋；E 结束回合
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (!document.getElementById('modal').classList.contains('hidden')) closeModal();
+      else if (UIST.choice && UIST.choice.spec.cancelable) finishChoice(null);
+      else if (UIST.mode !== 'idle') {
+        UIST.mode = 'idle'; UIST.cardIdx = null; UIST.selUid = null;
+        UI.refreshAll();
+      }
+    } else if (e.key === 'u' || e.key === 'U') {
+      document.getElementById('btn-undo').click();
+    } else if (e.key === 'e' || e.key === 'E') {
+      document.getElementById('btn-end').click();
+    }
+  });
+
+  // 右键：取消目标选择
+  document.addEventListener('contextmenu', (e) => {
+    if (UIST.choice) {
+      e.preventDefault();
+      if (UIST.choice.spec.cancelable) finishChoice(null);
+      return;
+    }
+    if (UIST.mode !== 'idle') {
+      e.preventDefault();
+      UIST.mode = 'idle'; UIST.cardIdx = null; UIST.selUid = null;
+      UI.refreshAll();
+    }
+  });
+
+  // 窗口尺寸变化后重排棋子
+  window.addEventListener('resize', () => {
+    UI.refreshAll();
+  });
+}
+
+boot();
+
+})();
+
+</script>
+</body>
+</html>

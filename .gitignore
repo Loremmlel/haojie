@@ -1,0 +1,11 @@
+# 依赖与构建缓存
+node_modules/
+*.log
+
+# 端到端临时产物
+test/_e2e.html
+
+# 操作系统杂物
+.DS_Store
+Thumbs.db
+desktop.ini

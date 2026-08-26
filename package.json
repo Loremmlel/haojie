@@ -1,0 +1,10 @@
+{
+  "name": "haojie",
+  "version": "1.0.0",
+  "description": "浩劫 —— 9x13 双人对战回合制棋盘游戏，可构建为单个 HTML 文件",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "test": "node test/smoke.js"
+  }
+}
