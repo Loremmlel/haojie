@@ -48,6 +48,7 @@ haojie/
 │  │  ├─ interactionStore.ts# 交互状态机（mode/selUid/choice/busy + act/ask）
 │  │  ├─ toastBus.ts        # 轻提示模块级总线
 │  │  ├─ geometry.ts        # posOf/metrics 计算（FX 与 React 共用唯一权威）
+│  │  ├─ highlights.ts      # computeHighlights 纯函数（部署/移动/攻击等目标高亮）
 │  │  ├─ hooks/             # useBoardMetrics
 │  │  ├─ fx/
 │  │  │  ├─ fx.ts           # 命令式动画内核（依赖注入化，零 React import）
@@ -63,12 +64,12 @@ haojie/
 ├─ tests/
 │  ├─ engine.test.ts        # 31 断言平移 + 随机整局模拟
 │  └─ e2e/smoke.e2e.mjs     # Edge headless 全链路冒烟（发布验收）
-└─ dist/index.html          # 构建产物（不入库）
+└─ dist/index.html          # 构建产物（随仓库追踪；仅 dist/_e2e.tmp.html 被 gitignore）
 ```
 
 ## 架构要点
 
-- **engine 零 DOM**：`src/engine/**` 八个文件不触碰 DOM/React/window，Node 可直接 import 驱动整局；未来联机可机械平移为独立 package。UI 对引擎的一切**写操作**必须经 Game 实例公开方法，只读计算经 `game.rules` 命名空间或纯函数具名导入。
+- **engine 零 DOM**：`src/engine/**` 九个 TS 文件不触碰 DOM/React/window，Node 可直接 import 驱动整局；未来联机可机械平移为独立 package。UI 对引擎的一切**写操作**必须经 Game 实例公开方法，只读计算经 `game.rules` 命名空间或纯函数具名导入。
 - **会话工厂**：`createGame(seed, deps)` 每次开局新建完整会话——state、事件队列、悔棋快照栈、死亡遗言队列全部收进闭包，支持多局并存，重开不再依赖 `location.reload()`；目标选择经 `deps.choose` 注入（浏览器注入 UI ask，测试注入自动选择器），函数值严禁进入 GameState。
 - **受控提交**：引擎保持原地变异，React 经 `useSyncExternalStore` 以 version 号订阅。一条操作产生的整条事件链由 FX 逐事件播放，默认**链尾单次提交**（数值/样式级刷新延迟到链尾），deploy 类事件带同步点（受控 bump + 双 rAF）保证后继节点及时物化。与旧版的毫秒级时序差异逐条记录在规格 §6.4。
 - **FX 特区**：`src/ui/fx/fx.ts` 是命令式领地——零 React import，通过注入的宿主元素、棋子 DOM ref 注册表与 Game 只读访问器工作；死亡节点删除权归 React（FX 只播 dying 动画）。

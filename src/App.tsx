@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createGame } from './engine/game.ts';
 import { setGame, getGame, bumpVersion, useGame } from './ui/gameStore.ts';
-import { ask, toast, act, finishChoice, resetSelection, getInteraction } from './ui/interactionStore.ts';
+import { ask, toast, act, finishChoice, resetSelection, resetAll, getInteraction } from './ui/interactionStore.ts';
 import { initFx } from './ui/fx/fx.ts';
 import { pieceRegistry } from './ui/fx/registry.ts';
 import TopBar from './ui/components/TopBar.tsx';
@@ -36,7 +36,10 @@ export default function App() {
     })();
     return () => { alive = false; };
   }, [seq]);
-  const restart = useCallback(() => { setGame(null); setWinner(null); setSeq((n) => n + 1); }, []);
+  const restart = useCallback(() => {
+    resetAll(); // 重开复位交互态（mode/cardIdx/selUid/inspectUid/choice/busy），对齐 v1 reload 语义
+    setGame(null); setWinner(null); setSeq((n) => n + 1);
+  }, []);
 
   // BoardArea 挂载后上报三个宿主元素（恒等稳定，只触发一次）
   const onHosts = useCallback((h: FxHosts) => {

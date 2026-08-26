@@ -42,6 +42,12 @@ export function finishChoice(v: ChoiceResult) {
 export function resetSelection() {
   setInteraction({ mode: 'idle', cardIdx: null, selUid: null });
 }
+/** 整局重开时全量复位交互态（App restart 调用，对齐 v1 reload 语义）。
+ *  resetSelection 只清 mode/cardIdx/selUid；重开还需清 inspectUid/choice/busy，
+ *  否则新局会带着旧选中态渲染（错位手牌高亮 / dep-ok 残留 / 同 uid 棋子被选中）。 */
+export function resetAll() {
+  setInteraction({ mode: 'idle', cardIdx: null, selUid: null, inspectUid: null, choice: null, busy: false });
+}
 
 export async function act(fn: (g: Game) => Promise<unknown>) {
   const g = getGame();

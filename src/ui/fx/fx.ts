@@ -23,7 +23,10 @@ export interface FxCtx {
 }
 
 let ctx: FxCtx | null = null;
-export function initFx(c: FxCtx): void { ctx = c; }
+export function initFx(c: FxCtx): void {
+  ctx = c;
+  evCursor = 0; // 重开（seq 重建通道）时 initFx 重装配，游标必须归零——否则新局首个 act 链会跳过开头事件
+}
 function fx(): FxCtx {
   if (!ctx) throw new Error('initFx 未装配——App 装配前不得调用特效');
   return ctx;
