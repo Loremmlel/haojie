@@ -7,7 +7,6 @@ import { useBoardMetrics } from '../hooks/useBoardMetrics.ts';
 import CellsGrid from './CellsGrid.tsx';
 import PiecesLayer from './PiecesLayer.tsx';
 import FxLayer, { type FxLayerHandle } from './FxLayer.tsx';
-import s from './BoardArea.module.css';
 
 export default function BoardArea() {
   const loaded = useGame();
@@ -17,8 +16,8 @@ export default function BoardArea() {
   if (!loaded) return null;
   const st = loaded.game.state;
   return (
-    <section id="boardwrap" className={s.boardwrap}>
-      <div id="board-outer" className={s.boardOuter}>
+    <section id="boardwrap">
+      <div id="board-outer">
         <CellsGrid st={st} boardRef={boardRef} />
         <PiecesLayer st={st} m={m} />
         <FxLayer ref={fxRef} />

@@ -17,7 +17,7 @@ function PieceView({ p, st, m }: { p: Piece; st: GameState; m: Metrics }) {
   const pos = posOf(p.x, p.y, !!p.big, m);
   return (
     <div ref={refCb}
-         className={`${s.piece} ${s[`own${p.owner}`]}${p.big ? ` ${s.big5}` : ''}`}
+         className={`piece ${s.piece} ${s[`own${p.owner}`]}${p.big ? ` ${s.big5}` : ''}`}
          data-uid={p.uid}
          style={{ left: pos.left, top: pos.top }}>
       <div className={s.face}>{def.emoji}</div>
