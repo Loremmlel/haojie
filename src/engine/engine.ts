@@ -138,10 +138,12 @@ export async function killPiece(s: Session, victim: Piece, killer: Piece | null)
   if (getDef(victim.defId).type !== 'base' && getDef(victim.defId).type !== 'grave') {
     s.pendingDeaths.push({ victim, killer });
   } else if (victim.defId === -1) {
-    checkWin(s.state);
     // win 事件：v1 在 checkWin 内 ev('win')，但 checkWin 现为 (st) 纯查询、无 Session 通道，
-    // 故补发于调用方（此处即基地阵亡的唯一判定点；其余 checkWin 调用方同样补发，保持 v1 事件流）。
-    if (s.state.winner != null) ev(s, { type: 'win', winner: s.state.winner });
+    // 故补发于调用方（此处即基地阵亡的判定点）。checkWin 仅在新判定/变更 winner 时返回
+    // 非 null，调用方尾部再次 checkWin 返回 null、不再补发——每次胜负恰好一个 win 事件
+    // （v1 每次调用都 ev('win') 造成重复，规格 N2「onWin 唯一属主」据此收敛）。
+    const w = checkWin(s.state);
+    if (w != null) ev(s, { type: 'win', winner: w });
   }
 }
 
@@ -154,19 +156,28 @@ export async function flushDeaths(ctx: HandlerCtx, s: Session): Promise<void> {
   }
 }
 
-/** 胜负判定：纯 (st) 查询。v1 的 ev('win') 已上移至调用方（见 killPiece/performAttack 及各动作函数）。 */
-export function checkWin(st: GameState): void {
+/**
+ * 胜负判定：纯 (st) 查询。返回「本次调用新判定或变更出的 winner」（无变化返回 null）——
+ * 调用方仅在返回值非 null 时补发 win 事件，保证每次胜利恰好一个 win 事件。
+ * v1 每次调用都 ev('win')（killPiece 与调用方尾部各一次），迁移后收敛为
+ * winner 变化一次一发：正常单杀 1 个事件，双杀（winner 从 A 翻转为 B）仍各发一次。
+ */
+export function checkWin(st: GameState): number | null {
+  const prev = st.winner;
   const b0 = st.pieces.find((p) => p.defId === -1 && p.owner === 0);
   const b1 = st.pieces.find((p) => p.defId === -1 && p.owner === 1);
-  if (!b0 || !b1) return; // 单元测试等无基地场景不判负
+  if (!b0 || !b1) return null; // 单元测试等无基地场景不判负
   const d0 = b0.hp <= 0, d1 = b1.hp <= 0;
   if (d0 && d1) { st.winner = 1 - st.curPlayer; }
   else if (d0) { st.winner = 1; }
   else if (d1) { st.winner = 0; }
-  if (st.winner != null) {
+  if (st.winner !== prev) {
+    const w = st.winner!; // 变化分支中 winner 必非 null（判定只会把它设为 0/1，不会设回 null）
     st.phase = 'over';
-    pushLog(st, `🏆 ${PNAME[st.winner]}摧毁了对方基地，获得胜利！`, 'l-impt');
+    pushLog(st, `🏆 ${PNAME[w]}摧毁了对方基地，获得胜利！`, 'l-impt');
+    return w;
   }
+  return null;
 }
 
 /** 自 game.js 上移：攻击结算核心（死吧/掷骰/投石机挂标/射手记录/定炮清充能）。
@@ -185,8 +196,8 @@ export async function performAttack(ctx: HandlerCtx, s: Session, p: Piece, targe
       pushLog(s.state, `💀 死吧！！【${getDef(target.defId).name}】当场毙命！`, 'l-impt');
       await killPiece(s, target, p);
       await flushDeaths(ctx, s);
-      checkWin(s.state);
-      if (s.state.winner != null) ev(s, { type: 'win', winner: s.state.winner });
+      const w = checkWin(s.state);
+      if (w != null) ev(s, { type: 'win', winner: w });
       return;
     }
   }
@@ -214,8 +225,8 @@ export async function performAttack(ctx: HandlerCtx, s: Session, p: Piece, targe
   if (p.defId === 9) p.hitThisTurn.push(target.uid);
   if (p.defId === 4) p.charge = 0;
   await flushDeaths(ctx, s);
-  checkWin(s.state);
-  if (s.state.winner != null) ev(s, { type: 'win', winner: s.state.winner });
+  const w = checkWin(s.state);
+  if (w != null) ev(s, { type: 'win', winner: w });
 }
 
 /** 自 game.js 上移：底层落子 + 冲锋询问。需要 ctx：询问走 ctx.choose。

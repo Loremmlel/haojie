@@ -214,6 +214,37 @@ test('死吧与金身', async () => {
   ok(golden.hp === 60, '被金身抵挡的攻击不另算伤害');
 });
 
+/* ═══════════ 胜负判定：win 事件单通道 ═══════════ */
+/* PR 评论 2：v1 的 checkWin 每次调用都 ev('win')，攻击/法术摧毁基地时
+ * killPiece 与调用方尾部各发一次 → 每次胜利 2 个 win 事件。
+ * v2 收敛为 checkWin 返回「新判定/变更的 winner」，胜利恰好一次一发。 */
+
+test('胜负判定：攻击摧毁基地恰好一个 win 事件', async () => {
+  const g = await freshGame();
+  spawn(g, 0, -1, 5, 1, { hp: 300, maxHp: 300 });                 // 蓝方基地（checkWin 需双方基地在场）
+  const b1 = spawn(g, 1, -1, 5, 13, { hp: 1, maxHp: 300 });       // 红方基地残血
+  const hitter = spawn(g, 0, 26, 5, 9, { atk: 100, range: 8 });   // 蓝方攻击手
+  g.state.curPlayer = 0;
+  const before = g.events.length;
+  await g.doAttack(hitter.uid, b1.uid);
+  ok(g.state.winner === 0, '红方基地被摧毁 → 蓝方获胜');
+  const wins = g.events.slice(before).filter((e) => e.type === 'win');
+  ok(wins.length === 1, `攻击路径恰好一个 win 事件（实际 ${wins.length}）`);
+});
+
+test('胜负判定：法术摧毁基地恰好一个 win 事件', async () => {
+  const g = await freshGame();
+  spawn(g, 0, -1, 5, 1, { hp: 300, maxHp: 300 });
+  const b1 = spawn(g, 1, -1, 5, 13, { hp: 20, maxHp: 300 });      // 红方基地 20 血（爆弹伤害 20）
+  g.state.curPlayer = 0;
+  g.state.hand[0].push({ uid: ++g.state.uidSeq, defId: 8 });      // 手牌塞一张爆弹
+  const before = g.events.length;
+  await g.castHandSpell(g.state.hand[0].length - 1, { x: 5, y: 13 });
+  ok(g.state.winner === 0, '爆弹摧毁红方基地 → 蓝方获胜');
+  const wins = g.events.slice(before).filter((e) => e.type === 'win');
+  ok(wins.length === 1, `法术路径恰好一个 win 事件（实际 ${wins.length}）`);
+});
+
 /* ═══════════ 随机整局模拟 ═══════════ */
 
 const BW = 9, BH = 13;

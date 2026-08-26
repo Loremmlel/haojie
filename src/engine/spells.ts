@@ -140,5 +140,7 @@ async function summonOnce(ctx: HandlerCtx, s: Session, owner: number): Promise<v
     kind: 'cell', cells,
     hint: `为重铸召唤的【${def.name}】选择部署位置`,
   })) as Cell;
-  deployPiece(ctx, s, owner, defId, spot.x, spot.y);
+  // 必须等待：deployPiece 内部对冲锋怪有异步部署选择（await ctx.choose），
+  // 若不 await，外层法术会在该选择完成前提交并清理 busy，选择结果随后才改状态（PR 评论 1）
+  await deployPiece(ctx, s, owner, defId, spot.x, spot.y);
 }

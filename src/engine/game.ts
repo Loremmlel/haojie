@@ -143,8 +143,8 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game> {
     sess.state.hand[sess.state.curPlayer].splice(handIdx, 1);
     await CAST[card.defId](ctx, sess, sess.state.curPlayer, got);
     await flushDeaths(ctx, sess);
-    checkWin(sess.state);
-    if (sess.state.winner != null) ev(sess, { type: 'win', winner: sess.state.winner });
+    const w = checkWin(sess.state);
+    if (w != null) ev(sess, { type: 'win', winner: w });
     checkPhaseAdvance();
     return true;
   };
@@ -157,8 +157,8 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game> {
     pushLog(sess.state, `✨ ${PNAME[sess.state.curPlayer]}释放了储存的法术【${getDef(card.defId).name}】！`, 'l-impt');
     await CAST[card.defId](ctx, sess, sess.state.curPlayer, got);
     await flushDeaths(ctx, sess);
-    checkWin(sess.state);
-    if (sess.state.winner != null) ev(sess, { type: 'win', winner: sess.state.winner });
+    const w = checkWin(sess.state);
+    if (w != null) ev(sess, { type: 'win', winner: w });
     return true;
   };
 
@@ -226,8 +226,9 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game> {
 
   const useSkill = async (uid: number): Promise<boolean> => {
     const p = pieceByUid(sess.state, uid);
-    const sk = SKILLS[p!.defId]; // v1 先取技能后判 p 为空（调用方必传合法 uid），`!` 仅类型适配
-    if (!p || !sk || p.owner !== sess.state.curPlayer || sess.state.phase !== 'action') return false;
+    if (!p) return false; // 无效/已死亡 uid 与其余行动方法一致返回 false（PR 评论 3）
+    const sk = SKILLS[p.defId];
+    if (!sk || p.owner !== sess.state.curPlayer || sess.state.phase !== 'action') return false;
     if (p.justDeployed || p.apLeft <= 0 || !sk.usable(p)) return false;
     const spec = sk.targetSpec(sess.state, p);
     let got: ChoiceResult = null;
@@ -239,8 +240,8 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game> {
     p.apLeft--;
     await sk.exec(ctx, sess, p, got);
     await flushDeaths(ctx, sess);
-    checkWin(sess.state);
-    if (sess.state.winner != null) ev(sess, { type: 'win', winner: sess.state.winner });
+    const w = checkWin(sess.state);
+    if (w != null) ev(sess, { type: 'win', winner: w });
     return true;
   };
 
