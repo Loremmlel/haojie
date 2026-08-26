@@ -37,6 +37,7 @@ function PieceView({ p, st, ia, m }: { p: Piece; st: GameState; ia: InteractionS
   const cls = [
     'piece',
     s.piece,
+    p.defId === -1 ? 'pop-in' : '', // 基地无 deploy 事件，入场动画由本类补上（v1 buildPieceEl 对所有棋子加 pop-in）
     s[`own${p.owner}`],
     p.big ? s.big5 : '',
     exhausted ? s.exhausted : '',

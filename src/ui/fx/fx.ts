@@ -302,8 +302,9 @@ async function playOne(e: GameEvent): Promise<void> {
     }
     case 'expire': break;
     case 'win': {
-      // 横幅归 FX、遮罩归 React：先播胜利横幅（对齐 v1 main.js:22），再交 onWin——无第二通道
-      await banner(`${PNAME[e.winner]}胜利！`, 'bwin');
+      // 横幅归 FX、遮罩归 React：与 v1 main.js:4-23 同帧——banner 不 await（后台播完），
+      // onWin 同帧触发，遮罩与横幅同现、链尾 bump 不被横幅 1050ms 拖迟
+      void banner(`${PNAME[e.winner]}胜利！`, 'bwin');
       fx().onWin(e.winner);
       break;
     }

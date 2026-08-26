@@ -30,7 +30,7 @@ export default function App() {
     })();
     return () => { alive = false; };
   }, [seq]);
-  const restart = useCallback(() => { setGame(null); setSeq((n) => n + 1); }, []);
+  const restart = useCallback(() => { setGame(null); setWinner(null); setSeq((n) => n + 1); }, []);
 
   // BoardArea 挂载后上报三个宿主元素（恒等稳定，只触发一次）
   const onHosts = useCallback((h: FxHosts) => {
