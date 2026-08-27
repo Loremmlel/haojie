@@ -16,6 +16,7 @@
 - `src/ui/fx/**` 保持零 React import；GameEvent 仍串行播放。
 - `busy` 继续阻止普通动作；choice 仍优先于 busy。
 - restart 可在普通 FX busy 中取消旧 run，但 pending choice 时仍禁用，避免遗留未 resolve 的 `ask()`。
+- restart 必须先使旧 run 失效并清空 App 的旧 `hosts` state；只有新 `BoardArea` 上报的新 host refs 才允许创建新 run，旧 run/旧 host 不得复用。
 - deploy 仍先 `onSyncPoint()`；death 仍由 `fx.ts` await，`PiecesLayer` 不增加 death `AnimatePresence`。
 - `pieceRegistry` 继续保存 root；root 继续是 `left/top + posOf()`、点击和几何测量 authority。
 - temporary FX 只写 root 下的 `[data-piece-motion]`，不写承载 persistent transform 的 root。
@@ -133,6 +134,7 @@ Then trigger a turn banner and restart while it is playing:
 
 ```js
 const oldGame = game();
+const oldBanner = $('#banner');
 window.confirm = () => true;
 click($('#btn-end'));
 if (!(await until(() => {
@@ -143,10 +145,15 @@ if (!(await until(() => {
 const restart = $('#btn-restart');
 if (!restart || restart.disabled) throw new Error('restart 被 FX busy 锁死');
 click(restart);
-if (!(await until(() => game() && game() !== oldGame && $('#banner') && $('#fxlayer'), 6000)))
-  throw new Error('FX 中 restart 未完成新局 DOM 物化');
+if (!(await until(() => {
+  const banner = $('#banner');
+  return game() && game() !== oldGame && banner && banner !== oldBanner && $('#fxlayer');
+}, 6000))) throw new Error('FX 中 restart 未完成新局 DOM 物化');
 out.restarted = true;
 
+// 给 BoardArea.onHosts → App setHosts → FX effect/initFx 一个短 settle；
+// 之后 sentinel 只检测真正的 stale completion，不把新 run 正常装配误判为旧 run 写入。
+await wait(100);
 const newBanner = $('#banner');
 newBanner.className = 'e2e-sentinel';
 await wait(1200);
@@ -244,17 +251,38 @@ export function initFx(c: FxCtx): void {
 
 Change `playOne` to `playOne(run, g, e)`. `playChain(g)` captures the current run once; after cancellation it returns silently. Helpers use the captured `run.ctx`, never a new global context after `await`.
 
-- [ ] **Step 5: App explicitly resets FX**
+- [ ] **Step 5: App 显式使旧 hosts 失效，并由新 hosts 重建 run**
 
 Import `resetFx`. Restart order:
 
 ```ts
 resetFx();
+setHosts(null); // 旧 BoardArea host refs 立即失效；禁止后续 effect 用 detached DOM 重建 run
 resetAll();
 setGame(null); setWinner(null); setSeq((n) => n + 1);
 ```
 
-FX effect removes `getGame` from `initFx(...)` and returns `resetFx` as cleanup. Preserve the nested `setTimeout(0)` in `onSyncPoint`; it is React materialization scheduling, not animation completion.
+FX effect removes `getGame` from `initFx(...)`, keeps `hosts` as the reinitialization trigger, and returns `resetFx` as cleanup:
+
+```ts
+useEffect(() => {
+  if (!hosts) return;
+  initFx({
+    hosts,
+    registry: pieceRegistry,
+    onWin,
+    onSyncPoint: async () => {
+      bumpVersion();
+      await new Promise((r) => setTimeout(() => setTimeout(r, 0), 0));
+    },
+  });
+  return resetFx;
+}, [hosts, onWin]);
+```
+
+`setHosts(null)` makes restart 的恢复路径显式：旧 run 被取消、旧 host refs 被清空；新局 `BoardArea` remount 后通过现有 `onHosts` 上报新的 DOM refs，`hosts` 从 `null` 变为新值，effect 必然再次调用 `initFx` 创建**新的** run。不要仅把 `seq` 加入 effect 依赖，因为 `seq` 变化时旧 host refs 可能仍指向已卸载 DOM；新 run 只能绑定新 `BoardArea` 上报的 hosts。
+
+Preserve the nested `setTimeout(0)` in `onSyncPoint`; it is React materialization scheduling, not animation completion.
 
 - [ ] **Step 6: Move transient primitives to Motion**
 
@@ -293,7 +321,7 @@ git add src/ui/fx/fx.ts src/App.tsx src/ui/components/ActionBar.tsx src/styles/g
 git commit -m "refactor: move transient FX to Motion"
 ```
 
-Expected: restart works during non-choice FX, old run cannot mutate new hosts, no unhandled rejection.
+Expected: restart works during non-choice FX, old run cannot mutate new hosts, fresh `BoardArea` hosts always create a new run, and no unhandled rejection is emitted.
 
 ---
 
