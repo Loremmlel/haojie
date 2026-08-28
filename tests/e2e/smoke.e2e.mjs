@@ -15,7 +15,8 @@ const DRIVER = `
 (function () {
   const out = { deployed: false, advanced: false, selected: false,
                 attacked: false, moved: false,
-                restarted: false, staleFxClean: false, error: '' };
+                restarted: false, staleFxClean: false,
+                motionHandle: false, deathOwned: false, error: '' };
   let finished = false;
   const done = () => {
     if (finished) return; finished = true;
@@ -189,6 +190,46 @@ const DRIVER = `
     if ($('#fxlayer').querySelector('.fly-num,.ring,.boom,.slash,.spell-cast,.bolt'))
       throw new Error('restart 后仍有旧 transient FX');
     out.staleFxClean = true;
+
+    // ── Task 3 红线：确定性 base-vs-base 攻击（motion handle + death 落在内层）──
+    // 放最后：击杀基地会决胜（phase→over/win 事件），后续断言将失效。
+    const g2 = game();
+    const s2 = g2.state;
+    s2.phase = 'action';
+    const attacker = s2.pieces.find((p) => p.owner === s2.curPlayer && p.defId === -1);
+    const victim = s2.pieces.find((p) => p.owner !== s2.curPlayer && p.defId === -1);
+    attacker.justDeployed = false;
+    attacker.apLeft = 1;
+    attacker.range = 99;
+    attacker.atk = 999;
+    victim.hp = 1;
+
+    const attackerRoot = $('.piece[data-uid="' + attacker.uid + '"]');
+    const victimRoot = $('.piece[data-uid="' + victim.uid + '"]');
+    if (!attackerRoot?.querySelector('[data-piece-motion]') ||
+        !victimRoot?.querySelector('[data-piece-motion]'))
+      throw new Error('piece motion handle 缺失');
+
+    click(attackerRoot);
+    if (!(await until(() => $('.atk-ok'), 2000))) throw new Error('确定性 death 场景无法攻击');
+    click(victimRoot);
+    // death FX 落在 motion node：root 的存活期即死亡 FX 链的保质期。本 harness
+    // （--virtual-time-budget）下 Motion 的 rAF/WAAPI 时钟不驱动（Task 2 实测——keyframe
+    // 解析走 frameloop，动画帧与 promise 永不落定），DOM 观测不到动画帧；
+    // 故断言为「同帧谓词」：motion node 存在 + root 挂载 + （真实浏览器可观测的
+    // getAnimations()/内联样式，或本 harness 可观测的同步死亡 FX 标志——fxlayer 的
+    // boom 粒子，由死亡事件在链内于同一帧创建）。
+    if (!(await until(() => {
+      const node = victimRoot.querySelector('[data-piece-motion]');
+      return node && victimRoot.isConnected &&
+        (node.getAnimations().length > 0 || node.style.opacity || node.style.transform ||
+         document.querySelector('#fxlayer .boom'));
+    }, 4000))) throw new Error('death FX 未落在 motion node');
+    if (!victimRoot.isConnected) throw new Error('death FX 完成前 React 已卸载 root');
+    if (!(await until(() => !document.querySelector('.piece[data-uid="' + victim.uid + '"]'), 5000)))
+      throw new Error('death FX 完成后 React 未卸载 root');
+    out.motionHandle = true;
+    out.deathOwned = true;
     done();
   })().catch((e) => { out.error = String((e && e.message) || e); done(); });
 })();
@@ -231,7 +272,8 @@ if (!raw) {
 const parsed = JSON.parse(raw);
 const ok = parsed.error === '' && parsed.deployed && parsed.advanced &&
             parsed.selected && (parsed.attacked || parsed.moved) &&
-            parsed.restarted && parsed.staleFxClean;
+            parsed.restarted && parsed.staleFxClean &&
+            parsed.motionHandle && parsed.deathOwned;
 if (!ok) {
   console.error('e2e 断言失败，out 对象：');
   console.error(JSON.stringify(parsed, null, 2));

@@ -115,22 +115,6 @@ body {
 @keyframes healPulse { 50% { box-shadow: 0 0 12px rgba(52,211,153,.45); } }
 .cell.sel-hl { border-color: var(--gold); box-shadow: 0 0 14px rgba(251,191,36,.5); }
 
-/* ─────────── 棋子 fx 命令式类（Global Constraints 第 2 条：留 global，Task 8 Step 5 复核）─────────── */
-/* 入场 / 死亡动画 */
-.piece.pop-in { animation: popIn .42s cubic-bezier(.34,1.56,.64,1); }
-@keyframes popIn { 0% { transform: scale(.15) translateY(-14px); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-.piece.dying { animation: dieAnim .5s ease-in forwards; pointer-events: none; z-index: 20; }
-@keyframes dieAnim {
-  0% { transform: scale(1); filter: brightness(2); }
-  100% { transform: scale(.2) rotate(80deg); opacity: 0; filter: brightness(3) blur(2px); }
-}
-.piece.hit-jolt { animation: jolt .3s; }
-@keyframes jolt {
-  0%,100% { transform: translate(0,0); }
-  25% { transform: translate(-4px,2px) scale(.95); }
-  55% { transform: translate(4px,-2px) scale(.97); }
-}
-
 /* ─────────── 特效层 ─────────── */
 #fxlayer { position: absolute; inset: 0; pointer-events: none; z-index: 40; overflow: visible; }
 
@@ -145,14 +129,13 @@ body {
 .fly-num.heal { color: #4ade80; }
 .fly-num.buff { color: var(--purple); }
 
+/* 静态形状（Task 3：动作由 transient Motion 驱动——scaleX/rotate/opacity，transform-origin 留 CSS） */
 .slash {
   position: absolute; z-index: 49; height: 4px; border-radius: 4px;
   background: linear-gradient(90deg, transparent, #fff 30%, var(--danger) 55%, transparent);
   transform-origin: left center;
-  animation: slashGo .26s ease-out forwards;
   filter: drop-shadow(0 0 8px rgba(255,80,80,.9));
 }
-@keyframes slashGo { 0% { transform: scaleX(0) rotate(var(--rot)); } 100% { transform: scaleX(1) rotate(var(--rot)); opacity: .1; } }
 
 .bolt {
   position: absolute; z-index: 48; width: 14px; height: 14px; border-radius: 50%;

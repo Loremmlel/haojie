@@ -1,16 +1,19 @@
-/* fx.ts · 特效引擎（v1 src/js/fx.js 逐字平移 + §7.2 结构性改动，Task 2 迁移 Motion）
+/* fx.ts · 特效引擎（v1 src/js/fx.js 逐字平移 + §7.2 结构性改动，Task 2/3 迁移 Motion）
  * 命令式特区：零 React import，仅靠 initFx 注入的 FxCtx 工作。
  * Task 2 结构性改动（对照本任务前）：
  *   - per-run 生命周期：initFx 建立 FxRun（alive/controls/nodes），resetFx 取消；
  *     transient/blocking 原语经 track() 登记 controls，动画停掉即清理节点；
- *   - 现役原语改 Motion animate()：flyNum/projectileTo/ring/boomAt/spellIcon/banner/shake；
- *     slash/lunge/pop-in/dying/hit-jolt 仍为 CSS/timer（Task 3 接手）；
+ *   - 现役原语改 Motion animate()：flyNum/projectileTo/ring/boomAt/spellIcon/banner/shake。
+ * Task 3 结构性改动：
+ *   - 棋子 root 与 inner [data-piece-motion]（pieceMotion）分离：root 只动 left/top（movePieceTo
+ *     Motion 驱动）与持久态 CSS；lunge/hit/deploy/death 的 temporary transform 只写 inner；
+ *   - slash 由 setTimeout 改为 transient Motion；legacy .pop-in/.dying/.hit-jolt CSS 删除。
  *   - playChain(g) 入口捕获当前 run；run.alive=false（restart 取消）后链尾静默返回，
  *     旧 completion 只写自身捕获的旧元素，不触碰重启后的新 DOM。
  * playChain(g) 消费 g.events（同一数组引用）按游标逐条播放，act/runSpellCast 链尾 await 后 bump。
  * （承接 §7.2 既有约束……以下原注保留）
  *   - deploy：syncPieces() → await ctx.onSyncPoint()（受控提交物化新节点），pop-in 由 fx 接手（v1 buildPieceEl）；
- *   - death：删 el.remove() 与 UI.syncPieces()，节点由 React 链尾卸载（.dying 终态 opacity:0 无跳变）；
+ *   - death：删 el.remove() 与 UI.syncPieces()，节点由 React 链尾卸载（Motion 终态 opacity:0 无跳变）；
  *   - move/hook：registry 取节点直写 left/top（geometry.posOf 公式，与 React 终态数值恒等）；
  *   - turn/attack/charm：refreshTop/syncStatFlash/refreshAll 删除（链尾 bump 统一刷新，豁免表 1-3 条）；
  *   - win：fx 先自行播胜利横幅（对齐 v1 main.js:22 行为），再调 ctx.onWin（横幅归 FX、遮罩归 React）。 */
@@ -125,6 +128,12 @@ function centerOf(x: number, y: number) {
 }
 function boardOuterOf(run: FxRun) { return run.ctx.hosts.boardOuter; }
 
+/** 棋子的 inner motion 节点（Task 3）：root 由 registry 持有（布局/点击/持久态），
+ *  temporary transform 一律写内层 [data-piece-motion]，与 React 持久态 CSS 互不踩写。 */
+function pieceMotion(run: FxRun, uid: number): HTMLElement | null {
+  return run.ctx.registry.get(uid)?.querySelector<HTMLElement>('[data-piece-motion]') ?? null;
+}
+
 /* ─────────── 特效原语 ─────────── */
 
 function flyNum(run: FxRun, uid: number, text: string, cls: string) {
@@ -145,29 +154,37 @@ function flyNum(run: FxRun, uid: number, text: string, cls: string) {
   transient(run, el, controls);
 }
 
-/** 近战冲刺：攻击者扑向目标再弹回（slash/棋子 transform 为 Task 3 领地，此处仅接 run 后原样保留） */
+/** 近战冲刺（Task 3）：inner 扑向目标再弹回（x/y/scale 单动画 out-and-back），
+ *  zIndex 由 root 提升（finally 恢复）；斩击线 slash 为 transient Motion。 */
 async function lunge(run: FxRun, pEl: HTMLElement, tEl: HTMLElement) {
   const b = boardOuterOf(run).getBoundingClientRect();
   const pr = pEl.getBoundingClientRect(), tr = tEl.getBoundingClientRect();
   const dx = (tr.left + tr.width / 2) - (pr.left + pr.width / 2);
   const dy = (tr.top + tr.height / 2) - (pr.top + pr.height / 2);
-  pEl.style.transition = 'transform .12s cubic-bezier(.5,0,.8,1)';
-  pEl.style.transform = `translate(${dx * 0.55}px, ${dy * 0.55}px) scale(1.08)`;
+  const body = pEl.querySelector<HTMLElement>('[data-piece-motion]');
   pEl.style.zIndex = '15'; // v1 数值 15，CSSOM 等义字符串
-  await sleep(120);
-  // 斩击线
-  const ang = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-  const slash = addEl(run, 'slash', {
-    left: (pr.left - b.left + pr.width / 2 + dx * 0.25 - 26) + 'px',
-    top: (pr.top - b.top + pr.height / 2 + dy * 0.25 - 2) + 'px',
-    width: '52px',
-    '--rot': ang + 'deg',
-  });
-  setTimeout(() => dropEl(run, slash), 300);
-  pEl.style.transition = 'left .32s cubic-bezier(.34,1.3,.5,1), top .32s cubic-bezier(.34,1.3,.5,1), transform .22s';
-  pEl.style.transform = '';
-  setTimeout(() => { pEl.style.zIndex = ''; }, 350);
-  await sleep(160);
+  try {
+    if (body) {
+      const kf = { x: [0, dx * 0.55, 0], y: [0, dy * 0.55, 0], scale: [1, 1.08, 1] };
+      const opts = { duration: 0.28, ease: 'easeOut' as const };
+      await settle(run, animate(body, kf, opts), 430);
+    } else {
+      await sleep(120);
+    }
+    // 斩击线（transient Motion：与旧 keyframes slashGo 等值——scaleX 0→1、opacity 渐隐，角度恒常）
+    const ang = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+    const slash = addEl(run, 'slash', {
+      left: (pr.left - b.left + pr.width / 2 + dx * 0.25 - 26) + 'px',
+      top: (pr.top - b.top + pr.height / 2 + dy * 0.25 - 2) + 'px',
+      width: '52px',
+    });
+    const kf = { scaleX: [0, 1], rotate: [ang + 'deg', ang + 'deg'], opacity: [0, 1, 0.1] };
+    const opts = { duration: 0.26, ease: 'easeOut' as const };
+    transient(run, slash, animate(slash, kf, opts));
+    await sleep(120);
+  } finally {
+    pEl.style.zIndex = '';
+  }
 }
 
 /** 远程弹道（棋子 → 棋子） */
@@ -198,7 +215,13 @@ function hitRing(run: FxRun, uid: number, color?: string) {
   const tEl = run.ctx.registry.get(uid);
   if (!tEl) return;
   const r = tEl.getBoundingClientRect();
-  tEl.classList.remove('hit-jolt'); void tEl.offsetWidth; tEl.classList.add('hit-jolt');
+  // 受击抖动（非阻塞，与旧 jolt keyframes 等值）：只写 inner，不动 root 持久态样式。
+  const body = pieceMotion(run, uid);
+  if (body) {
+    const kf = { x: [0, -4, 4, 0], y: [0, 2, -2, 0], scale: [1, 0.95, 0.97, 1] };
+    const opts = { duration: 0.3, ease: 'easeOut' as const };
+    background(run, animate(body, kf, opts));
+  }
   const ring = addEl(run, 'ring', {
     left: (r.left - boardOuterOf(run).getBoundingClientRect().left + r.width / 2) + 'px',
     top: (r.top - boardOuterOf(run).getBoundingClientRect().top + r.height / 2) + 'px',
@@ -285,24 +308,25 @@ async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
     }
     case 'deploy': {
       await run.ctx.onSyncPoint(); // 受控提交：bump + 双 rAF 确保新节点物化、注册表就绪
-      const el = run.ctx.registry.get(e.uid);
-      if (el) { // v1 buildPieceEl 的 pop-in 由 fx 接手（React 只物化节点，不加 fx 命令式类）
-        el.classList.add('pop-in');
-        setTimeout(() => el.classList.remove('pop-in'), 500);
+      if (!run.alive) break; // 取消/重启后注册表可能已换局（uid 复用）——守卫，不碰新 DOM
+      // v1 buildPieceEl 的 pop-in 由 fx 接手（React 只物化节点）：非阻塞 inner 入场
+      const body = pieceMotion(run, e.uid);
+      if (body) {
+        const kf = { scale: [0.15, 1], y: ['-14px', '0px'], opacity: [0, 1] };
+        const opts = { duration: 0.42, ease: [0.34, 1.56, 0.64, 1] as const };
+        background(run, animate(body, kf, opts));
       }
       break;
     }
     case 'move': {
-      movePieceTo(run, g, e.uid, e.tx, e.ty);
-      await sleep(340);
+      await movePieceTo(run, g, e.uid, e.tx, e.ty);
       break;
     }
     case 'hook': {
       // 钩链飞向目标原位置 → 勾住拉回
       const h = centerOf(e.fx, e.fy), t = centerOf(e.x0, e.y0);
       await projectileTo(run, h.cx, h.cy, t.cx, t.cy, '#fda4af');
-      movePieceTo(run, g, e.uid, e.tx, e.ty);
-      await sleep(340);
+      await movePieceTo(run, g, e.uid, e.tx, e.ty);
       break;
     }
     case 'attack': {
@@ -372,10 +396,21 @@ async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
         const r = el.getBoundingClientRect();
         const b = boardOuterOf(run).getBoundingClientRect();
         boomAt(run, r.left - b.left + r.width / 2, r.top - b.top + r.height / 2, getDef(e.defId).type === 'base' ? '#fbbf24' : '#94a3b8', 12);
-        el.classList.add('dying');
-        await sleep(480); // 节点保留：由 React 链尾卸载（.dying 终态 opacity:0，无跳变）
+        // 死亡动画（inner，阻塞到完成）：节点保留，由 React 链尾卸载（终态 opacity:0 无跳变）
+        const body = pieceMotion(run, e.uid);
+        if (body) {
+          const kf = {
+            scale: [1, 0.2], rotate: [0, 80], opacity: [1, 0],
+            filter: ['brightness(2)', 'brightness(3) blur(2px)'],
+          };
+          const opts = { duration: 0.48, ease: 'easeIn' as const };
+          await settle(run, animate(body, kf, opts), 720);
+        } else {
+          await sleep(480);
+        }
       }
-      if (getDef(e.defId).type === 'base') shake(run);
+      // 基地阵亡震屏：await 后的写入点，重启取消时不得震新局棋盘
+      if (run.alive && getDef(e.defId).type === 'base') shake(run);
       break;
     }
     case 'spell': {
@@ -410,13 +445,14 @@ async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
   }
 }
 
-/** move/hook 的位移权威归属（§6.2 第 4 条）：registry 取节点直写 left/top，
- *  与 React 链尾以同一 posOf 公式输出的终态数值恒等，故无跳变。 */
-function movePieceTo(run: FxRun, g: Game, uid: number, x: number, y: number) {
+/** move/hook 的位移权威归属（§6.2 第 4 条）：Motion 动 root 的 left/top，
+ *  与 React 链尾以同一 posOf 公式输出的终态数值恒等，故无跳变；root 无 CSS left/top transition。 */
+async function movePieceTo(run: FxRun, g: Game, uid: number, x: number, y: number) {
   const p = g.state.pieces.find((q) => q.uid === uid);
-  const el = run.ctx.registry.get(uid);
-  if (!p || !el) return;
+  const root = run.ctx.registry.get(uid);
+  if (!p || !root) return;
   const pos = posOf(x, y, !!p.big, M);
-  el.style.left = pos.left + 'px';
-  el.style.top = pos.top + 'px';
+  const kf = { left: pos.left + 'px', top: pos.top + 'px' };
+  const opts = { duration: 0.32, ease: [0.34, 1.3, 0.5, 1] as const };
+  await settle(run, animate(root, kf, opts), 500);
 }
