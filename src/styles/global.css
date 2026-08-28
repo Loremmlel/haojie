@@ -6,18 +6,14 @@
 :root {
   /* 主题 token（本作为深色设计，直接固定深色调） */
   --bg-0: #0b0e17;
-  --bg-1: #111527;
   --bg-2: #1a2038;
   --bg-3: #232b4a;
   --ink: #e8ecf8;
   --ink-dim: #9aa3c0;
   --ink-faint: #5d6580;
   --p1: #38bdf8;          /* 蓝方主色 */
-  --p1-deep: #0c4a6e;
   --p2: #fb7185;          /* 红方主色 */
-  --p2-deep: #881337;
   --gold: #fbbf24;
-  --green: #34d399;
   --purple: #c084fc;
   --danger: #f87171;
   --line: rgba(148, 163, 216, .16);
@@ -41,11 +37,6 @@ body {
 }
 
 #app { height: 100vh; display: flex; flex-direction: column; }
-
-/* ─────────── 共享 keyframes（废弃区：原全球化副本已删）───────────
-   Task 5：shieldSpin/wobble/winGlow/blink 的 global 副本全部删除——各 module
-   （Piece/WinMask/TopBar）持有编译后一并哈希化的 module-local 副本，global 副本零引用
-   属死代码；fadeIn/modalUp 已于 Task 4 随生命周期迁移 Motion 一并不复存在。 */
 
 /* ─────────── 主布局 ─────────── */
 #layout {

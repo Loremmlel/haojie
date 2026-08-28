@@ -14,9 +14,7 @@
 .w1 { color: var(--p1); text-shadow: 0 0 40px rgba(56,189,248,.9); }
 .w2 { color: var(--p2); text-shadow: 0 0 40px rgba(251,113,133,.9); }
 
-/* 本地再定义：postcss-modules 会把 :global 规则里的 animation 引用哈希化，本文件无同名
- * 声明则引用悬空——module-local 副本即为唯一有效副本。Task 5：global.css 的全局同名副本
- * 已删除（Task 4 评审确认编译产物只引用本文件的本地哈希化副本，全局副本零引用属死代码）。 */
+/* 本地再定义：:global 规则里的 animation 引用随 module 哈希化，无同名声明即悬空。 */
 @keyframes winGlow { from { transform: scale(1); } to { transform: scale(1.06); } }
 
 /* Task 5：reduce 下 winGlow 静态化——文字保留 w1/w2 静态色与辉光，仅移除缩放循环。 */

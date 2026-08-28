@@ -1,26 +1,15 @@
-/* fx.ts · 特效引擎（v1 src/js/fx.js 逐字平移 + §7.2 结构性改动，Task 2/3 迁移 Motion）
- * 命令式特区：零 React import，仅靠 initFx 注入的 FxCtx 工作。
- * Task 2 结构性改动（对照本任务前）：
- *   - per-run 生命周期：initFx 建立 FxRun（alive/controls/nodes），resetFx 取消；
- *     transient/blocking 原语经 track() 登记 controls，动画停掉即清理节点；
- *   - 现役原语改 Motion animate()：flyNum/projectileTo/ring/boomAt/spellIcon/banner/shake。
- * Task 3 结构性改动：
- *   - 棋子 root 与 inner [data-piece-motion]（pieceMotion）分离：root 只动 left/top（movePieceTo
- *     Motion 驱动）与持久态 CSS；lunge/hit/deploy/death 的 temporary transform 只写 inner；
- *   - slash 由 setTimeout 改为 transient Motion；legacy .pop-in/.dying/.hit-jolt CSS 删除。
- *   - playChain(g) 入口捕获当前 run；run.alive=false（restart 取消）后链尾静默返回，
- *     旧 completion 只写自身捕获的旧元素，不触碰重启后的新 DOM。
- * Task 5（本任务）：prefersReducedMotion() 参数化——reduced 只缩动画时长、兜底 settle 与
- *   编排 sleep，不改 playOne 分支/await 顺序；7 处残余 easing: 键改正为 ease
- *   （motion-dom 只认 ease：easing 属 React Motion 键，直传被静默忽略降为默认 easeOut），
- *   其中两处 cubic-bezier 字符串改数组形式（Easing 类型只收 readonly [n,n,n,n] 贝塞尔元组）。
- * playChain(g) 消费 g.events（同一数组引用）按游标逐条播放，act/runSpellCast 链尾 await 后 bump。
- * （承接 §7.2 既有约束……以下原注保留）
- *   - deploy：syncPieces() → await ctx.onSyncPoint()（受控提交物化新节点），pop-in 由 fx 接手（v1 buildPieceEl）；
- *   - death：删 el.remove() 与 UI.syncPieces()，节点由 React 链尾卸载（Motion 终态 opacity:0 无跳变）；
- *   - move/hook：registry 取节点直写 left/top（geometry.posOf 公式，与 React 终态数值恒等）；
- *   - turn/attack/charm：refreshTop/syncStatFlash/refreshAll 删除（链尾 bump 统一刷新，豁免表 1-3 条）；
- *   - win：fx 先自行播胜利横幅（对齐 v1 main.js:22 行为），再调 ctx.onWin（横幅归 FX、遮罩归 React）。 */
+/* fx.ts · 特效引擎（v1 src/js/fx.js 平移 + Motion 迁移后的现役实现）
+ * 命令式特区：零 React import，仅靠 initFx 注入的 FxCtx 工作；playChain(g) 消费
+ * g.events（同一数组引用）按游标逐条播放，act/runSpellCast 链尾 await 后 bump 统一刷新
+ * （事件段不直接调 refreshStat）。
+ * 生命周期：initFx 建立 FxRun（alive/controls/nodes），resetFx 取消——controls 停止、
+ * 节点整批移除；run.alive=false 后链尾静默返回，旧 completion 只写自身捕获的旧元素。
+ * 结构：棋子 root 只动 left/top（movePieceTo 的 Motion 驱动，posOf 公式与 React 终态
+ * 数值恒等）与持久态 CSS；lunge/hit/deploy/death 的 temporary transform 只写内层
+ * [data-piece-motion]（pieceMotion），与 React 持久态互不踩写。
+ * reduced-motion（prefersReducedMotion）只参数化时长/兜底，不改 playOne 分支与 await 顺序。
+ * Motion promise 由 rAF 驱动；settle 以同量级 sleep 兜底（headless 虚拟时间下动画时钟与
+ * 虚拟定时器不同步、promise 可能不结算；真实浏览器动画恒先完成，兜底即弃）。 */
 import { animate } from 'motion';
 import type { Game } from '../../engine/types.ts';
 import { W, H, getDef } from '../../engine/data.ts';
@@ -317,7 +306,6 @@ export async function playChain(g: Game): Promise<void> {
 async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
   switch (e.type) {
     case 'turn': {
-      // refreshTop 删除（链尾 bump 统一刷新，豁免表第 2 条）
       await banner(run, `第 ${e.turn} 回合 · ${PNAME[e.player]}行动`, e.player === 0 ? 'b1' : 'b2');
       break;
     }
@@ -349,7 +337,6 @@ async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
       const tEl = run.ctx.registry.get(e.tuid);
       if (!atkP || !tEl) break;
       if (e.healMode) { await projectile(run, e.uid, e.tuid, '#34d399', true); break; }
-      // syncStatFlash 删除（链尾 bump 统一刷新，豁免表第 1 条）
       const isRanged = nearestDist(
         atkP,
         g.state.pieces.find((q) => q.uid === e.tuid)! // tEl 在注册表 ⇒ 目标存活，必在 state
@@ -402,7 +389,6 @@ async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
     case 'charm': {
       flyNum(run, e.uid, '🎭 倒戈！', 'buff');
       shake(run);
-      // refreshAll 删除（链尾 bump 统一刷新，豁免表第 3 条）
       break;
     }
     case 'death': {
