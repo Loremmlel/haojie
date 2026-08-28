@@ -42,13 +42,10 @@ body {
 
 #app { height: 100vh; display: flex; flex-direction: column; }
 
-/* ─────────── 共享 keyframes（被 module 类按名引用 / 跨 module 共享，一律留 global）─────────── */
-@keyframes blink { 50% { opacity: .35; } }
-@keyframes shieldSpin { 50% { filter: brightness(1.35); } }
-@keyframes wobble { 50% { transform: rotate(-14deg); } }
-/* 胜利遮罩文字辉光：由 WinMask.module.css 的 :global 规则按名引用，不能哈希化，留 global。
-   （Task 4：fadeIn/modalUp 生命周期 keyframes 已迁 Motion 并删除——条目随之移除。） */
-@keyframes winGlow { from { transform: scale(1); } to { transform: scale(1.06); } }
+/* ─────────── 共享 keyframes（废弃区：原全球化副本已删）───────────
+   Task 5：shieldSpin/wobble/winGlow/blink 的 global 副本全部删除——各 module
+   （Piece/WinMask/TopBar）持有编译后一并哈希化的 module-local 副本，global 副本零引用
+   属死代码；fadeIn/modalUp 已于 Task 4 随生命周期迁移 Motion 一并不复存在。 */
 
 /* ─────────── 主布局 ─────────── */
 #layout {
@@ -113,6 +110,11 @@ body {
 .cell.heal-ok { cursor: pointer; border-color: rgba(52, 211, 153, .85); background: rgba(52, 211, 153, .14); animation: healPulse 1.2s ease-in-out infinite; }
 @keyframes healPulse { 50% { box-shadow: 0 0 12px rgba(52,211,153,.45); } }
 .cell.sel-hl { border-color: var(--gold); box-shadow: 0 0 14px rgba(251,191,36,.5); }
+
+/* Task 5：reduce 下高亮脉冲静态化——保留颜色/边框态（上面基础规则），仅移除脉冲动画。 */
+@media (prefers-reduced-motion: reduce) {
+  .cell.dep-ok, .cell.atk-ok, .cell.sk-ok, .cell.heal-ok { animation: none; }
+}
 
 /* ─────────── 特效层 ─────────── */
 #fxlayer { position: absolute; inset: 0; pointer-events: none; z-index: 40; overflow: visible; }

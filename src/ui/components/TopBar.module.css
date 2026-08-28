@@ -1,7 +1,7 @@
 /* TopBar.module.css · 顶栏样式（自 global.css 顶栏区段平移；DOM id 仍保留作 e2e 钩子）
- * 注：@keyframes blink 在 global.css 亦留一份（跨 module 共享 keyframes 一律 global）；
- * CSS Modules 会把本文件内的 keyframe 引用哈希化，故必须在本文件内同名再定义一份，
- * 才能让 .side.active .sideName::after 的 animation 指向存在的 keyframes（编译后哈希名一致）。 */
+ * 注：@keyframes blink 本地同名再定义——CSS Modules 会把本文件内的 keyframe 引用哈希化，
+ * 不本地定义则引用悬空（编译后哈希名一致）。
+ * Task 5：global.css 的全局同名副本已删除（零引用死代码，本文件副本即唯一定义）。 */
 .topbar {
   display: flex; align-items: center; gap: 14px;
   padding: 8px 16px;

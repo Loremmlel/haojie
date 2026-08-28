@@ -1,4 +1,6 @@
-/** 发布前端到端冒烟：真实浏览器中完成 清手牌→跨回合→选子→攻击/移动 链路。 */
+/** 发布前端到端冒烟：真实浏览器中完成 清手牌→跨回合→选子→攻击/移动 链路。
+ *  Task 5：--reduced-motion 映射 Edge --force-prefers-reduced-motion，驱动用
+ *  matchMedia 复核偏好确实生效（仅当 CLI 带上该标志时断言为 true）。 */
 import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -9,6 +11,7 @@ const EDGE_CANDIDATES = [
 ];
 const edge = EDGE_CANDIDATES.find(existsSync);
 if (!edge) { console.error('未找到 msedge.exe'); process.exit(1); }
+const reducedMotion = process.argv.includes('--reduced-motion');
 
 const DRIVER = `
 <script>
@@ -17,7 +20,9 @@ const DRIVER = `
                 attacked: false, moved: false,
                 restarted: false, staleFxClean: false,
                 motionHandle: false, deathOwned: false,
-                modalExit: false, error: '' };
+                modalExit: false,
+                reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+                error: '' };
   let finished = false;
   const done = () => {
     if (finished) return; finished = true;
@@ -67,9 +72,9 @@ const DRIVER = `
     const drainOne = async () => {
       for (let attempt = 0; attempt < 4; attempt++) {
         const s = st();
-        if ($('#optfloat')) {
+        if ($$('#optfloat').length) {
           const before = game().events.length;
-          click($('#optfloat button'));  // 冲锋等询问浮层
+          click($$('#optfloat button').pop());  // 冲锋等询问浮层（取最新节点，防残留退出动画的影子节点）
           if (await until(() => game().events.length > before, 1500)) return true;
         }
         const before = s.hand[s.curPlayer].length;
@@ -124,9 +129,9 @@ const DRIVER = `
         throw new Error('动作链未在 8s 内播完');
       if (s.phase === 'deploy') { await drainOne(); continue; }
       // 浮层点击闭环（同 drainOne）：真实询问消除后有事件；残留 exit 节点无 effect。
-      if ($('#optfloat')) {
+      if ($$('#optfloat').length) {
         const before = game().events.length;
-        click($('#optfloat button'));
+        click($$('#optfloat button').pop());
         if (await until(() => game().events.length > before, 1500)) { await wait(200); continue; }
       }
       if (!hasActor()) { click($('#btn-end')); await wait(500); continue; }
@@ -280,6 +285,7 @@ let dump = '';
 try {
   dump = execFileSync(edge, [
     '--headless=new', '--disable-gpu', '--virtual-time-budget=60000', '--dump-dom',
+    ...(reducedMotion ? ['--force-prefers-reduced-motion'] : []),
     pathToFileURL(tmpPath).href,
   ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 } finally {
@@ -302,7 +308,8 @@ const ok = parsed.error === '' && parsed.deployed && parsed.advanced &&
             parsed.selected && (parsed.attacked || parsed.moved) &&
             parsed.restarted && parsed.staleFxClean &&
             parsed.motionHandle && parsed.deathOwned &&
-            parsed.modalExit;
+            parsed.modalExit &&
+            (!reducedMotion || parsed.reducedMotion);
 if (!ok) {
   console.error('e2e 断言失败，out 对象：');
   console.error(JSON.stringify(parsed, null, 2));

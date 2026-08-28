@@ -2,9 +2,10 @@
  * 已删死代码：.neutral（v1 零引用）。
  * Task 3：temporary 棋子 FX（pop-in/dying/hit-jolt 与 keyframes）已迁 fx.ts 的 Motion，
  * .piece root 只留持久态（transform/filter）过渡；temporary transform 由内层 .motionBody 承接。
- * shieldSpin/wobble 在 global.css 亦留一份（跨 module 共享 keyframes 一律 global）——
  * CSS Modules 会把本文件内的 keyframe 引用哈希化，故必须在本文件内同名再定义一份，
- * 才能让 .shielded/.marked/.charmed 的 animation 指向存在的 keyframes（编译后哈希名一致）。 */
+ * 才能让 .shielded/.marked/.charmed 的 animation 指向存在的 keyframes（编译后哈希名一致）。
+ * Task 5：global.css 的 shieldSpin/wobble 全局同名副本已删除（编译产物只引用本文件的
+ * 哈希化副本，全局副本零引用、属死代码）——本文件副本即唯一定义。 */
 /* Task 3：root 的 left/top 由 movePieceTo 的 Motion 驱动（无 CSS transition）；
  * root 只保留持久态（transform/filter）的 CSS 过渡；temporary transform 一律写 .motionBody 内层。 */
 .piece {
@@ -81,3 +82,8 @@
 .big5 .face { border-radius: 18%; font-size: calc(var(--cell) * .8); }
 .selected { transform: scale(1.12); z-index: 8; }
 .selected .face { box-shadow: 0 0 0 3px var(--gold), 0 0 20px rgba(251,191,36,.6) !important; }
+
+/* Task 5：reduce 下持续动画静态化——护盾光/标记/魅惑只保留颜色与图标态，移除循环动画。 */
+@media (prefers-reduced-motion: reduce) {
+  .shielded .face, .marked::after, .charmed::before { animation: none; }
+}

@@ -10,6 +10,10 @@
  *   - slash 由 setTimeout 改为 transient Motion；legacy .pop-in/.dying/.hit-jolt CSS 删除。
  *   - playChain(g) 入口捕获当前 run；run.alive=false（restart 取消）后链尾静默返回，
  *     旧 completion 只写自身捕获的旧元素，不触碰重启后的新 DOM。
+ * Task 5（本任务）：prefersReducedMotion() 参数化——reduced 只缩动画时长、兜底 settle 与
+ *   编排 sleep，不改 playOne 分支/await 顺序；7 处残余 easing: 键改正为 ease
+ *   （motion-dom 只认 ease：easing 属 React Motion 键，直传被静默忽略降为默认 easeOut），
+ *   其中两处 cubic-bezier 字符串改数组形式（Easing 类型只收 readonly [n,n,n,n] 贝塞尔元组）。
  * playChain(g) 消费 g.events（同一数组引用）按游标逐条播放，act/runSpellCast 链尾 await 后 bump。
  * （承接 §7.2 既有约束……以下原注保留）
  *   - deploy：syncPieces() → await ctx.onSyncPoint()（受控提交物化新节点），pop-in 由 fx 接手（v1 buildPieceEl）；
@@ -119,6 +123,11 @@ export function setMetrics(m: Metrics): void { M = m; }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(() => r(), ms));
 
+/** Task 5：系统 reduced-motion 偏好。只参数化演出时长/兜底时长，一律不改控制流。 */
+function prefersReducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 /** 格子中心相对 #board-outer 的像素坐标 */
 function centerOf(x: number, y: number) {
   return {
@@ -149,7 +158,7 @@ function flyNum(run: FxRun, uid: number, text: string, cls: string) {
   // keyframes/options 用 const 变量传递：motion 的 DOMKeyframesDefinition/AnimationOptions
   // 为交叉/联合类型，字面量直传会触发 excess-property 检查而拒绝（实测）。
   const kf = { opacity: [0, 1, 1, 0], y: ['20%', '-10%', '-140%'], scale: [0.5, 1.15, 1] };
-  const opts = { duration: 0.7, easing: 'easeOut' };
+  const opts = { duration: prefersReducedMotion() ? 0.05 : 0.7, ease: 'easeOut' as const };
   const controls = animate(el, kf, opts);
   transient(run, el, controls);
 }
@@ -157,6 +166,7 @@ function flyNum(run: FxRun, uid: number, text: string, cls: string) {
 /** 近战冲刺（Task 3）：inner 扑向目标再弹回（x/y/scale 单动画 out-and-back），
  *  zIndex 由 root 提升（finally 恢复）；斩击线 slash 为 transient Motion。 */
 async function lunge(run: FxRun, pEl: HTMLElement, tEl: HTMLElement) {
+  const rm = prefersReducedMotion();
   const b = boardOuterOf(run).getBoundingClientRect();
   const pr = pEl.getBoundingClientRect(), tr = tEl.getBoundingClientRect();
   const dx = (tr.left + tr.width / 2) - (pr.left + pr.width / 2);
@@ -166,10 +176,10 @@ async function lunge(run: FxRun, pEl: HTMLElement, tEl: HTMLElement) {
   try {
     if (body) {
       const kf = { x: [0, dx * 0.55, 0], y: [0, dy * 0.55, 0], scale: [1, 1.08, 1] };
-      const opts = { duration: 0.28, ease: 'easeOut' as const };
-      await settle(run, animate(body, kf, opts), 430);
+      const opts = { duration: rm ? 0.06 : 0.28, ease: 'easeOut' as const };
+      await settle(run, animate(body, kf, opts), rm ? 200 : 430);
     } else {
-      await sleep(120);
+      await sleep(rm ? 40 : 120);
     }
     // 斩击线（transient Motion：与旧 keyframes slashGo 等值——scaleX 0→1、opacity 渐隐，角度恒常）
     const ang = Math.atan2(dy, dx) * 180 / Math.PI + 90;
@@ -179,9 +189,9 @@ async function lunge(run: FxRun, pEl: HTMLElement, tEl: HTMLElement) {
       width: '52px',
     });
     const kf = { scaleX: [0, 1], rotate: [ang + 'deg', ang + 'deg'], opacity: [0, 1, 0.1] };
-    const opts = { duration: 0.26, ease: 'easeOut' as const };
+    const opts = { duration: rm ? 0.05 : 0.26, ease: 'easeOut' as const };
     transient(run, slash, animate(slash, kf, opts));
-    await sleep(120);
+    await sleep(rm ? 40 : 120);
   } finally {
     pEl.style.zIndex = '';
   }
@@ -201,17 +211,19 @@ async function projectile(run: FxRun, fromUid: number, toUid: number, color?: st
 
 /** 远程弹道原语（像素坐标 → 像素坐标）：阻塞到落点；取消（stop → then 拒绝）后静默返回。 */
 async function projectileTo(run: FxRun, x1: number, y1: number, x2: number, y2: number, color?: string) {
+  const rm = prefersReducedMotion();
   const dist = Math.hypot(x2 - x1, y2 - y1);
-  const dur = Math.min(420, Math.max(140, dist * 1.4));
+  const dur = rm ? 60 : Math.min(420, Math.max(140, dist * 1.4));
   const el = addEl(run, 'bolt', { left: x1 + 'px', top: y1 + 'px', color: color || '#fbbf24' });
   const kf = { left: x2 + 'px', top: y2 + 'px' };
-  const opts = { duration: dur / 1000, easing: 'linear' };
+  const opts = { duration: dur / 1000, ease: 'linear' as const };
   const controls = animate(el, kf, opts);
-  await settle(run, controls, dur + 150);
+  await settle(run, controls, rm ? 200 : dur + 150);
   if (run.alive) dropEl(run, el);
 }
 
 function hitRing(run: FxRun, uid: number, color?: string) {
+  const rm = prefersReducedMotion();
   const tEl = run.ctx.registry.get(uid);
   if (!tEl) return;
   const r = tEl.getBoundingClientRect();
@@ -219,7 +231,7 @@ function hitRing(run: FxRun, uid: number, color?: string) {
   const body = pieceMotion(run, uid);
   if (body) {
     const kf = { x: [0, -4, 4, 0], y: [0, 2, -2, 0], scale: [1, 0.95, 0.97, 1] };
-    const opts = { duration: 0.3, ease: 'easeOut' as const };
+    const opts = { duration: rm ? 0.05 : 0.3, ease: 'easeOut' as const };
     background(run, animate(body, kf, opts));
   }
   const ring = addEl(run, 'ring', {
@@ -228,13 +240,14 @@ function hitRing(run: FxRun, uid: number, color?: string) {
     color: color || '',
   });
   const kf = { width: [8, r.width * 1.7 + 'px'], height: [8, r.width * 1.7 + 'px'], opacity: [1, 0] };
-  const opts = { duration: 0.55, easing: 'cubic-bezier(.2,.8,.3,1)' };
+  const opts = { duration: rm ? 0.05 : 0.55, ease: [0.2, 0.8, 0.3, 1] as const };
   const controls = animate(ring, kf, opts);
   transient(run, ring, controls);
 }
 
 /** 爆炸粒子（爆弹/死亡等） */
 function boomAt(run: FxRun, px: number, py: number, color: string, n?: number) {
+  const rm = prefersReducedMotion();
   for (let i = 0; i < (n || 8); i++) {
     const ang = Math.random() * Math.PI * 2;
     const d = 24 + Math.random() * 42;
@@ -244,7 +257,7 @@ function boomAt(run: FxRun, px: number, py: number, color: string, n?: number) {
       width: 5 + Math.random() * 7 + 'px', height: 5 + Math.random() * 7 + 'px',
     });
     const kf = { x: Math.cos(ang) * d + 'px', y: Math.sin(ang) * d + 'px', rotate: [45, 345], scale: [1, 0.3], opacity: [1, 0] };
-    const opts = { duration: 0.7, easing: 'cubic-bezier(.15,.6,.4,1)' };
+    const opts = { duration: rm ? 0.05 : 0.7, ease: [0.15, 0.6, 0.4, 1] as const };
     const controls = animate(b, kf, opts);
     transient(run, b, controls);
   }
@@ -252,6 +265,7 @@ function boomAt(run: FxRun, px: number, py: number, color: string, n?: number) {
 
 /** 法术图标：阻塞到弹出完成。 */
 async function spellIcon(run: FxRun, text: string, x: number, y: number) {
+  const rm = prefersReducedMotion();
   const { cx, cy } = centerOf(x, y);
   const el = addEl(run, 'spell-cast', { left: cx + 'px', top: cy + 'px' }, text);
   const kf = {
@@ -260,20 +274,21 @@ async function spellIcon(run: FxRun, text: string, x: number, y: number) {
     rotate: [-30, 6, 0, 0],
     y: ['0%', '0%', '0%', '-40%'],
   };
-  const opts = { duration: 0.75, easing: 'easeOut' };
+  const opts = { duration: rm ? 0.06 : 0.75, ease: 'easeOut' as const };
   const controls = animate(el, kf, opts);
-  await settle(run, controls, 900);
+  await settle(run, controls, rm ? 200 : 900);
   if (run.alive) dropEl(run, el);
 }
 
 export async function banner(run: FxRun, text: string, cls: string): Promise<void> {
+  const rm = prefersReducedMotion();
   const el = run.ctx.hosts.banner; // 捕获旧横幅：取消后 completion 只写自身旧元素
   el.textContent = text;
   el.className = cls || '';
   const kf = { opacity: [0, 1, 1, 0], scaleX: [0.2, 1, 1, 1.05] };
-  const opts = { duration: 1.05, easing: 'easeOut' };
+  const opts = { duration: rm ? 0.06 : 1.05, ease: 'easeOut' as const };
   const controls = animate(el, kf, opts);
-  await settle(run, controls, 1250);
+  await settle(run, controls, rm ? 200 : 1250);
   if (run.alive) el.className = 'hidden';
 }
 
@@ -281,7 +296,7 @@ export async function banner(run: FxRun, text: string, cls: string): Promise<voi
 function shake(run: FxRun) {
   const el = boardOuterOf(run);
   const kf = { x: [0, -7, 6, -4, 0], y: [0, 4, -5, 2, 0] };
-  const opts = { duration: 0.38, easing: 'easeOut' };
+  const opts = { duration: prefersReducedMotion() ? 0.05 : 0.38, ease: 'easeOut' as const };
   const controls = animate(el, kf, opts);
   background(run, controls);
 }
@@ -313,7 +328,7 @@ async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
       const body = pieceMotion(run, e.uid);
       if (body) {
         const kf = { scale: [0.15, 1], y: ['-14px', '0px'], opacity: [0, 1] };
-        const opts = { duration: 0.42, ease: [0.34, 1.56, 0.64, 1] as const };
+        const opts = { duration: prefersReducedMotion() ? 0.05 : 0.42, ease: [0.34, 1.56, 0.64, 1] as const };
         background(run, animate(body, kf, opts));
       }
       break;
@@ -391,6 +406,7 @@ async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
       break;
     }
     case 'death': {
+      const rm = prefersReducedMotion();
       const el = run.ctx.registry.get(e.uid);
       if (el) {
         const r = el.getBoundingClientRect();
@@ -403,10 +419,10 @@ async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
             scale: [1, 0.2], rotate: [0, 80], opacity: [1, 0],
             filter: ['brightness(2)', 'brightness(3) blur(2px)'],
           };
-          const opts = { duration: 0.48, ease: 'easeIn' as const };
-          await settle(run, animate(body, kf, opts), 720);
+          const opts = { duration: rm ? 0.06 : 0.48, ease: 'easeIn' as const };
+          await settle(run, animate(body, kf, opts), rm ? 200 : 720);
         } else {
-          await sleep(480);
+          await sleep(rm ? 80 : 480);
         }
       }
       // 基地阵亡震屏：await 后的写入点，重启取消时不得震新局棋盘
@@ -423,7 +439,7 @@ async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
           boomAt(run, cx, cy, '#fb923c', 7);
         }
         shake(run);
-        await sleep(250);
+        await sleep(prefersReducedMotion() ? 60 : 250);
       } else if (e.uid != null) {
         const icons: Record<number, string> = { 17: '🛡️', 18: '💀', 22: '🎭' };
         await spellIcon(run, icons[e.defId] || def.emoji,
@@ -448,11 +464,12 @@ async function playOne(run: FxRun, g: Game, e: GameEvent): Promise<void> {
 /** move/hook 的位移权威归属（§6.2 第 4 条）：Motion 动 root 的 left/top，
  *  与 React 链尾以同一 posOf 公式输出的终态数值恒等，故无跳变；root 无 CSS left/top transition。 */
 async function movePieceTo(run: FxRun, g: Game, uid: number, x: number, y: number) {
+  const rm = prefersReducedMotion();
   const p = g.state.pieces.find((q) => q.uid === uid);
   const root = run.ctx.registry.get(uid);
   if (!p || !root) return;
   const pos = posOf(x, y, !!p.big, M);
   const kf = { left: pos.left + 'px', top: pos.top + 'px' };
-  const opts = { duration: 0.32, ease: [0.34, 1.3, 0.5, 1] as const };
-  await settle(run, animate(root, kf, opts), 500);
+  const opts = { duration: rm ? 0.06 : 0.32, ease: [0.34, 1.3, 0.5, 1] as const };
+  await settle(run, animate(root, kf, opts), rm ? 200 : 500);
 }
