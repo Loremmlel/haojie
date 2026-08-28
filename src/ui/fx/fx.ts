@@ -106,6 +106,19 @@ export function initFx(c: FxCtx): void {
   evCursor = 0; // 重开（seq 重建通道）时 initFx 重装配，游标必须归零——否则新局首个 act 链会跳过开头事件
 }
 
+/** 只读查询：uid 是否为「死亡事件已入列、尚未被链消费」的尸体（PiecesLayer 过滤用）。
+ *  引擎从不从 pieces 移除死亡棋子（killPiece 只设 dead=true），只能按「事件游标」判定
+ *  暂挂窗：死亡事件由 fn 同步入列（早于 React 对 busy/dead 的批量渲染），
+ *  playChain 消费后才过游标——链首到链尾全程命中，链尾之后（含任意后续 busy 链，
+ *  旧 !p.dead || ia.busy 过滤会在每条后续链开头把 0HP 尸体重新挂载）不再命中。 */
+export function isDying(g: Game, uid: number): boolean {
+  for (let i = evCursor; i < g.events.length; i++) {
+    const e = g.events[i];
+    if (e.type === 'death' && e.uid === uid) return true;
+  }
+  return false;
+}
+
 let evCursor = 0;         // 已播放游标（undo 清空 events 后经 > 防御重置）
 let M: Metrics = { size: 48, gap: 3, pad: 10 };
 export function setMetrics(m: Metrics): void { M = m; }
@@ -179,10 +192,9 @@ async function lunge(run: FxRun, pEl: HTMLElement, tEl: HTMLElement) {
     });
     const kf = { scaleX: [0, 1], rotate: [ang + 'deg', ang + 'deg'], opacity: [0, 1, 0.1] };
     const opts = { duration: rm ? 0.05 : 0.26, ease: 'easeOut' as const };
-    transient(run, slash, animate(slash, kf, opts));
-    await sleep(rm ? 40 : 120);
+    transient(run, slash, animate(slash, kf, opts)); // slash 为 transient（非阻塞），无必要尾等
   } finally {
-    pEl.style.zIndex = '';
+    pEl.style.zIndex = ''; // finally 恒恢复：即便 body 分支异常/取消也不残留提升层
   }
 }
 

@@ -20,6 +20,7 @@ const DRIVER = `
                 attacked: false, moved: false,
                 restarted: false, staleFxClean: false,
                 motionHandle: false, deathOwned: false,
+                corpseNoRemount: false,
                 modalExit: false,
                 reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
                 error: '' };
@@ -226,27 +227,47 @@ const DRIVER = `
       throw new Error('restart 后仍有旧 transient FX');
     out.staleFxClean = true;
 
-    // ── Task 3 红线：确定性 base-vs-base 攻击（motion handle + death 落在内层）──
-    // 放最后：击杀基地会决胜（phase→over/win 事件），后续断言将失效。
+    // ── Task 3 红线：确定性 death 场景（motion handle + death 落在内层）──
+    // 击杀目标从「敌方基地」改为「合成的敌方随从」：击杀基地会决胜（phase→over/win），
+    // 其后无任何动作链可播放——尸体复挂回归必须发生在「死亡后仍有后续链」的对局中。
+    // fresh 局只有两基地，引擎又从不从 pieces 移除死亡棋子（spells.ts / killPiece 只设
+    // dead=true），因此以敌方基地为模板合成一枚敌方随从。
     const g2 = game();
     const s2 = g2.state;
     s2.phase = 'action';
     const attacker = s2.pieces.find((p) => p.owner === s2.curPlayer && p.defId === -1);
-    const victim = s2.pieces.find((p) => p.owner !== s2.curPlayer && p.defId === -1);
+    const victim = JSON.parse(JSON.stringify(
+      s2.pieces.find((p) => p.owner !== s2.curPlayer && p.defId === -1)
+    ));
+    Object.assign(victim, {
+      uid: ++s2.uidSeq,
+      owner: 1 - s2.curPlayer,
+      defId: 6,
+      x: 4, y: 12,
+      hp: 1, maxHp: 50, atk: 1, range: 1, mv: 1,
+      big: false,
+      justDeployed: false, apLeft: 1,
+      charge: 0, skillUses: 0, killCount: 0, guardUsed: false,
+      mark10: null, shieldUntil: 0,
+      reaperFrom: 0, reaperTo: 0, charmFrom: 0, charmTo: 0,
+      atkBuffs: [], beatCount: 0, diesAt: 0, hitThisTurn: [],
+    });
+    delete victim.dead;
+    s2.pieces.push(victim);
     attacker.justDeployed = false;
     attacker.apLeft = 1;
     attacker.range = 99;
     attacker.atk = 999;
-    victim.hp = 1;
 
     const attackerRoot = $('.piece[data-uid="' + attacker.uid + '"]');
-    const victimRoot = $('.piece[data-uid="' + victim.uid + '"]');
-    if (!attackerRoot?.querySelector('[data-piece-motion]') ||
-        !victimRoot?.querySelector('[data-piece-motion]'))
+    if (!attackerRoot?.querySelector('[data-piece-motion]'))
       throw new Error('piece motion handle 缺失');
-
     click(attackerRoot);
     if (!(await until(() => $('.atk-ok'), 2000))) throw new Error('确定性 death 场景无法攻击');
+    // 合成棋子入 state 后经本次选中 bump 才渲染，节点此刻才在 DOM（非基地、非初始渲染）
+    const victimRoot = $('.piece[data-uid="' + victim.uid + '"]');
+    if (!victimRoot?.querySelector('[data-piece-motion]'))
+      throw new Error('piece motion handle 缺失');
     click(victimRoot);
     // death FX 落在 motion node：root 的存活期即死亡 FX 链的保质期。本 harness
     // （--virtual-time-budget）下 Motion 的 rAF/WAAPI 时钟不驱动（Task 2 实测——keyframe
@@ -265,6 +286,19 @@ const DRIVER = `
       throw new Error('death FX 完成后 React 未卸载 root');
     out.motionHandle = true;
     out.deathOwned = true;
+
+    // ── 尸体复挂回归（whole-branch 评审 fable）：杀死的是随从、对局未决胜；
+    // 随后 endTurn 触发下一条动作链（回合横幅）。旧 !p.dead || ia.busy 过滤会在每条
+    // 后续链开头（act 置 busy 的首次渲染）把 0HP 尸体重新挂载整个链期；断言点 =
+    // 下一条链的横幅播放中（busy 恒 true、链在播，尸体若复挂此刻必在 DOM）。
+    await endTurn();
+    if (!(await until(() => {
+      const b = $('#banner');
+      return b && !b.classList.contains('hidden');
+    }, 3000))) throw new Error('未进入回合横幅 FX');
+    if (document.querySelector('.piece[data-uid="' + victim.uid + '"]'))
+      throw new Error('尸体在后续链（回合横幅）中重新出现');
+    out.corpseNoRemount = true;
     done();
   })().catch((e) => { out.error = String((e && e.message) || e); done(); });
 })();
@@ -309,7 +343,7 @@ const parsed = JSON.parse(raw);
 const ok = parsed.error === '' && parsed.deployed && parsed.advanced &&
             parsed.selected && (parsed.attacked || parsed.moved) &&
             parsed.restarted && parsed.staleFxClean &&
-            parsed.motionHandle && parsed.deathOwned &&
+            parsed.motionHandle && parsed.deathOwned && parsed.corpseNoRemount &&
             parsed.modalExit &&
             (!reducedMotion || parsed.reducedMotion);
 if (!ok) {

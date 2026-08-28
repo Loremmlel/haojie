@@ -9,7 +9,9 @@ import { useCallback } from 'react';
 import { getDef } from '../../engine/data.ts';
 import { effAtk, effActions } from '../../engine/rules.ts';
 import { pieceRegistry } from '../fx/registry.ts';
+import { isDying } from '../fx/fx.ts';
 import { posOf, type Metrics } from '../geometry.ts';
+import type { Game } from '../../engine/types.ts';
 import type { GameState, Piece } from '../../engine/state.ts';
 import type { InteractionState } from '../interactionStore.ts';
 import s from './Piece.module.css';
@@ -75,17 +77,20 @@ function PieceView({ p, st, ia, m }: { p: Piece; st: GameState; ia: InteractionS
   );
 }
 
-export default function PiecesLayer({ st, ia, m }: {
-  st: GameState; ia: InteractionState; m: Metrics | null;
+export default function PiecesLayer({ game, st, ia, m }: {
+  game: Game; st: GameState; ia: InteractionState; m: Metrics | null;
 }) {
   if (!m) return null; // 量测就绪前不渲染（无坐标可定位）
   return (
     <>
-      {/* 死亡节点存续期归 FX 链：引擎在 doAttack 内同步置 dead，act 的 busy 渲染会先于
-          playChain 提交；若此时即按 !p.dead 过滤，阵亡棋子会在死亡 FX 播完前被卸载
-          （registry 也随之清空，fx 拿不到 motion node）。busy 期间保留挂载，
-          链尾 bump + busy 复位后再由下一次渲染移除——React 卸载即「链尾卸载」。 */}
-      {st.pieces.filter((p) => !p.dead || ia.busy).map((p) => (
+      {/* 死亡节点存续期归 FX 链（isDying 事件游标法）：引擎在 doAttack 内同步置 dead，
+          act 的 busy/dead 渲染（React 批量 flush）会先于 playChain 提交；若此时即按
+          !p.dead 直接过滤，阵亡棋子会在死亡 FX 播完前被卸载（registry 也随之清空，
+          fx 拿不到 motion node）。fx 的 isDying 以「死亡事件未消费」判定：死亡事件由
+          fn 同步入列、playChain 消费后才过游标——链首到链尾命中保持挂载，链尾之后
+          （含任意后续 busy 链）不再命中——旧 !p.dead || ia.busy 过滤会在每条后续链
+          开头把 0HP 尸体重新挂载整个链期。 */}
+      {st.pieces.filter((p) => !p.dead || isDying(game, p.uid)).map((p) => (
         <PieceView key={p.uid} p={p} st={st} ia={ia} m={m} />
       ))}
     </>

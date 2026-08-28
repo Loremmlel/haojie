@@ -43,6 +43,11 @@
 .side.active .sideName::after { content: " ◈"; animation: blink 1.2s infinite; }
 @keyframes blink { 50% { opacity: .35; } }
 
+/* Task 5 补遗：reduce 下回合指示 blink 静态化——保留 ◈ 指示符，仅移除闪烁循环。 */
+@media (prefers-reduced-motion: reduce) {
+  .side.active .sideName::after { animation: none; }
+}
+
 .turnbox { text-align: center; min-width: 130px; }
 .turnNum { font-size: 1.02rem; font-weight: 900; letter-spacing: 2px; color: var(--gold); }
 .turnOwner { font-size: .82rem; color: var(--ink-dim); margin-top: 1px; }

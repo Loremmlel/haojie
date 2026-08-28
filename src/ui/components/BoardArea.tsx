@@ -162,7 +162,7 @@ export default function BoardArea({ onHosts }: { onHosts: (h: FxHosts) => void }
     <section id="boardwrap">
       <div id="board-outer" onClick={handleBoardClick}>
         <CellsGrid game={game} boardRef={boardRef} />
-        <PiecesLayer st={game.state} ia={ia} m={m} />
+        <PiecesLayer game={game} st={game.state} ia={ia} m={m} />
         <FxLayer ref={fxRef} />
       </div>
     </section>
