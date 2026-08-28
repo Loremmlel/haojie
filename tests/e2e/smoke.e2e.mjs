@@ -73,8 +73,9 @@ const DRIVER = `
       for (let attempt = 0; attempt < 4; attempt++) {
         const s = st();
         if ($$('#optfloat').length) {
+          const of = $$('#optfloat').pop();               // 最新 overlay（防残留退出动画的影子节点）
           const before = game().events.length;
-          click($$('#optfloat button').pop());  // 冲锋等询问浮层（取最新节点，防残留退出动画的影子节点）
+          click(of && of.querySelector('button'));        // 语义保持：仍点第一个选项（options[0]）
           if (await until(() => game().events.length > before, 1500)) return true;
         }
         const before = s.hand[s.curPlayer].length;
@@ -130,8 +131,9 @@ const DRIVER = `
       if (s.phase === 'deploy') { await drainOne(); continue; }
       // 浮层点击闭环（同 drainOne）：真实询问消除后有事件；残留 exit 节点无 effect。
       if ($$('#optfloat').length) {
+        const of = $$('#optfloat').pop();
         const before = game().events.length;
-        click($$('#optfloat button').pop());
+        click(of && of.querySelector('button'));
         if (await until(() => game().events.length > before, 1500)) { await wait(200); continue; }
       }
       if (!hasActor()) { click($('#btn-end')); await wait(500); continue; }
