@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createGame } from './engine/game.ts';
 import { setGame, getGame, bumpVersion, useGame } from './ui/gameStore.ts';
 import { ask, toast, act, finishChoice, resetSelection, resetAll, getInteraction } from './ui/interactionStore.ts';
-import { initFx } from './ui/fx/fx.ts';
+import { initFx, resetFx } from './ui/fx/fx.ts';
 import { pieceRegistry } from './ui/fx/registry.ts';
 import TopBar from './ui/components/TopBar.tsx';
 import BoardArea, { type FxHosts } from './ui/components/BoardArea.tsx';
@@ -37,6 +37,8 @@ export default function App() {
     return () => { alive = false; };
   }, [seq]);
   const restart = useCallback(() => {
+    resetFx();
+    setHosts(null); // 旧 BoardArea host refs 立即失效；禁止后续 effect 用 detached DOM 重建 run
     resetAll(); // 重开复位交互态（mode/cardIdx/selUid/inspectUid/choice/busy），对齐 v1 reload 语义
     setGame(null); setWinner(null); setSeq((n) => n + 1);
   }, []);
@@ -52,13 +54,14 @@ export default function App() {
     setWinner(w);
   }, []);
 
-  // initFx 装配（宿主就绪后一次；onSyncPoint = bump + 双 rAF，deploy 受控提交）
+  // initFx 装配（宿主就绪后一次；onSyncPoint = bump + 双 rAF，deploy 受控提交）。
+  // hosts 为重建触发器：restart 先 resetFx + setHosts(null)，新局 BoardArea 上报新 refs 后再 initFx
+  // 创建全新 run；cleanup 返回 resetFx，宿主失效即取消当前 run。
   useEffect(() => {
     if (!hosts) return;
     initFx({
       hosts,
       registry: pieceRegistry,
-      getGame: () => getGame()!, // act/playChain 均在 game 就绪后运行，非空安全
       onWin,
       onSyncPoint: async () => {
         bumpVersion();
@@ -68,6 +71,7 @@ export default function App() {
         await new Promise((r) => setTimeout(() => setTimeout(r, 0), 0));
       },
     });
+    return resetFx;
   }, [hosts, onWin]);
 
   // 快捷键（main.js bindTopButtons keydown 平移）：Esc 三级（关 modal → 取消 cancelable choice →

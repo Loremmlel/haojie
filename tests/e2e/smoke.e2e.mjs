@@ -14,7 +14,8 @@ const DRIVER = `
 <script>
 (function () {
   const out = { deployed: false, advanced: false, selected: false,
-                attacked: false, moved: false, error: '' };
+                attacked: false, moved: false,
+                restarted: false, staleFxClean: false, error: '' };
   let finished = false;
   const done = () => {
     if (finished) return; finished = true;
@@ -40,27 +41,31 @@ const DRIVER = `
     // N1 修正：boot 完成时相位是 'deploy'（首回合手牌非空不推进），只等游戏就绪
     if (!(await until(() => !!st(), 20000))) throw new Error('游戏未启动');
 
-    // deploy 相位处理一张手牌；返回是否取得进展
+    // deploy 相位处理一张手牌；返回是否取得进展。
+    // 帧竞争：动作点击落在上一条 act 链（回合横幅等）仍在播的 busy 帧会被吞掉，
+    // 用「整段重试」兜底——等链收尾后重新执行一次。
     const drainOne = async () => {
-      const s = st();
-      if ($('#optfloat')) { click($('#optfloat button')); return true; }  // 冲锋等询问浮层
-      const before = s.hand[s.curPlayer].length;
-      const storeBtn = $('[data-store]');
-      if (storeBtn) { click(storeBtn); }                  // 法术：储存无目标选择，必定成功
-      else {
-        const card = $('#hand [data-card]');
-        if (!card) throw new Error('deploy 相位但手牌区为空');
-        click(card);                                       // 进入部署模式
-        if (!(await until(() => $('.cell.dep-ok') || $('[data-discard]'), 3000)))
-          throw new Error('选卡后既无落点也无弃置钮');
-        const cell = $('.cell.dep-ok');
-        if (cell) { click(cell); out.deployed = true; }
-        else { click($('[data-discard]')); }               // 无处部署 → 弃置
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const s = st();
+        if ($('#optfloat')) { click($('#optfloat button')); return true; }  // 冲锋等询问浮层
+        const before = s.hand[s.curPlayer].length;
+        const storeBtn = $('[data-store]');
+        if (storeBtn) { click(storeBtn); }                  // 法术：储存无目标选择，必定成功
+        else {
+          const card = $('#hand [data-card]');
+          if (!card) throw new Error('deploy 相位但手牌区为空');
+          click(card);                                       // 进入部署模式
+          if (!(await until(() => $('.cell.dep-ok') || $('[data-discard]'), 3000)))
+            throw new Error('选卡后既无落点也无弃置钮');
+          const cell = $('.cell.dep-ok');
+          if (cell) { click(cell); out.deployed = true; }
+          else { click($('[data-discard]')); }               // 无处部署 → 弃置
+        }
+        if (await until(() => st().phase !== 'deploy' ||
+            st().hand[st().curPlayer].length < before, 5000)) return true;
+        await wait(600);                                     // 点击被链 busy 吞掉 → 等收尾再重试
       }
-      if (!(await until(() => st().phase !== 'deploy' ||
-          st().hand[st().curPlayer].length < before, 5000)))
-        throw new Error('手牌处理卡死');
-      return true;
+      throw new Error('手牌处理卡死');
     };
 
     // 「存在确定有动作可做」的己方棋子（大肉比蓄势流程复杂，排除）
@@ -81,9 +86,17 @@ const DRIVER = `
       if (s.phase === 'over') throw new Error('对局意外提前结束');
       // 时序护栏（headless 动画链时序调整，简报实施提示授权）：hand-splice 先于 playChain
       // 播完，若不等 busy 清除，上一条 act 的 finally resetSelection 会取消本次部署模式、
-      // busy 锁会吞掉本次真实点击。#btn-restart 的 disabled 即 ia.busy；optfloat 出现时
-      // busy 由 choose 持有（合法等待应答），放行交给主循环的浮层分支处理。
-      if (!(await until(() => { const b = $('#btn-restart'); return !b || !b.disabled || $('#optfloat'); }, 8000)))
+      // busy 锁会吞掉本次真实点击。Task 2 重载：#btn-restart 不再绑 busy（disabled 仅 choice），
+      // 链是否在播由 #btn-end 的 disabled（busy||相位||胜负）与回合横幅可见性共同判定——
+      // 按钮可用→放行；回合横幅在播→等；deploy/over 相位且无横幅→放行（同相位忙点走自身循环）。
+      if (!(await until(() => {
+        const b = $('#btn-end');
+        if (b && !b.disabled) return true;
+        const bn = $('#banner');
+        if (bn && !bn.classList.contains('hidden')) return false;
+        const s2 = st();
+        return !s2 || s2.phase === 'deploy' || s2.phase === 'over';
+      }, 8000)))
         throw new Error('动作链未在 8s 内播完');
       if (s.phase === 'deploy') { await drainOne(); continue; }
       if ($('#optfloat')) { click($('#optfloat button')); await wait(200); continue; }
@@ -103,7 +116,16 @@ const DRIVER = `
       if (!el) throw new Error('找不到棋子 DOM uid=' + mine.uid);
       click(el);
       out.selected = true;
-      if (!(await until(() => $('.atk-ok') || $('.mv-ok'), 5000))) throw new Error('选中后无高亮');
+      // 帧竞争：点击落在链 busy 帧会被吞掉（无高亮）；等链收尾后重试一次
+      if (!(await until(() => $('.atk-ok') || $('.mv-ok'), 5000))) {
+        await wait(600);
+        click(el);
+        if (!(await until(() => $('.atk-ok') || $('.mv-ok'), 5000)))
+          throw new Error('选中后无高亮 | phase=' + st().phase +
+            ' cur=' + st().curPlayer + ' uid=' + mine.uid +
+            ' endDisabled=' + ($('#btn-end') && $('#btn-end').disabled) +
+            ' undoDisabled=' + ($('#btn-undo') && $('#btn-undo').disabled));
+      }
 
       if (plan === 'attack' && $('.atk-ok')) {
         const tuid = game().rules.attackTargets(mine)[0].uid;
@@ -115,9 +137,58 @@ const DRIVER = `
         if (mv) { click(mv); out.moved = true; }
       }
       acted = true;
-      await wait(2500);                                    // 等动画链与链尾提交
+      if (!(await until(() => {
+        const b = $('#btn-end');
+        return !b || !b.disabled;
+      }, 8000))) throw new Error('动作链未在 8s 内结束');
     }
     if (!acted) throw new Error('24 轮内未能完成任何行动');
+
+    // ── restart-during-FX 红线（Task 2）：回合横幅播放中重开。
+    // 旧实现 #btn-restart 绑 ia.busy → 被 FX busy 锁死；新实现以 choice 为 disabled 依据，
+    // restart 直接 resetFx 取消旧 run，旧 completion 不得写入新局 banner。
+    // 前一条 act 链的 busy 释放与 React 提交间存在竞窗（disabled 属性滞后一拍），
+    // 直接点击可能落在旧 busy 帧（事件无副作用）；用「点击-验证事件-重试」闭环保证点击生效。
+    const endTurn = async () => {
+      for (let i = 0; i < 5; i++) {
+        if (!(await until(() => { const b = $('#btn-end'); return !b || !b.disabled; }, 8000)))
+          throw new Error('动作链未在 8s 内结束');
+        const before = game().events.length;
+        click($('#btn-end'));
+        if (await until(() => game().events.length > before, 2500)) return;
+      }
+      throw new Error('endTurn 点击 5 次均未生效');
+    };
+    const oldGame = game();
+    const oldBanner = $('#banner');
+    window.confirm = () => true;
+    await endTurn();
+    if (!(await until(() => {
+      const b = $('#banner');
+      return b && !b.classList.contains('hidden');
+    }, 3000))) throw new Error('未进入回合横幅 FX');
+
+    const restart = $('#btn-restart');
+    if (!restart || restart.disabled) throw new Error('restart 被 FX busy 锁死');
+    click(restart);
+    if (!(await until(() => {
+      const banner = $('#banner');
+      return game() && game() !== oldGame && banner && banner !== oldBanner && $('#fxlayer');
+    }, 6000))) throw new Error('FX 中 restart 未完成新局 DOM 物化');
+    out.restarted = true;
+
+    // 给 BoardArea.onHosts → App setHosts → FX effect/initFx 一个短 settle；
+    // 之后 sentinel 只检测真正的 stale completion，不把新 run 正常装配误判为旧 run 写入。
+    await wait(100);
+    const newBanner = $('#banner');
+    newBanner.className = 'e2e-sentinel';
+    await wait(1200);
+    if (newBanner.className !== 'e2e-sentinel')
+      throw new Error('旧 FX completion 写入了新局 banner');
+    newBanner.className = 'hidden';
+    if ($('#fxlayer').querySelector('.fly-num,.ring,.boom,.slash,.spell-cast,.bolt'))
+      throw new Error('restart 后仍有旧 transient FX');
+    out.staleFxClean = true;
     done();
   })().catch((e) => { out.error = String((e && e.message) || e); done(); });
 })();
@@ -159,7 +230,8 @@ if (!raw) {
 
 const parsed = JSON.parse(raw);
 const ok = parsed.error === '' && parsed.deployed && parsed.advanced &&
-            parsed.selected && (parsed.attacked || parsed.moved);
+            parsed.selected && (parsed.attacked || parsed.moved) &&
+            parsed.restarted && parsed.staleFxClean;
 if (!ok) {
   console.error('e2e 断言失败，out 对象：');
   console.error(JSON.stringify(parsed, null, 2));
