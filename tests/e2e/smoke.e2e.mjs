@@ -16,7 +16,8 @@ const DRIVER = `
   const out = { deployed: false, advanced: false, selected: false,
                 attacked: false, moved: false,
                 restarted: false, staleFxClean: false,
-                motionHandle: false, deathOwned: false, error: '' };
+                motionHandle: false, deathOwned: false,
+                modalExit: false, error: '' };
   let finished = false;
   const done = () => {
     if (finished) return; finished = true;
@@ -42,13 +43,35 @@ const DRIVER = `
     // N1 修正：boot 完成时相位是 'deploy'（首回合手牌非空不推进），只等游戏就绪
     if (!(await until(() => !!st(), 20000))) throw new Error('游戏未启动');
 
+    // ── Task 4 红线：Modal exit 生命周期（close 后 AnimatePresence 持有到 exit 播完才卸载）──
+    // 实测（2026-08-28）：本 harness（--virtual-time-budget + --dump-dom）下 Motion 的 rAF
+    // frameloop 不驱动（Task 2 实测同源）——exit 的 keyframe 解析/结算永不落定，组件被
+    // AnimatePresence 无限持有（close+30/300/1600ms 采样：无动画对象、样式冻结、仍挂载）。
+    // 故红灯语义保留 30ms「不得立即卸载」，绿灯改为验证「exit 生命周期已触发」：
+    // close 后跨整个 exit 时长（0.28s）仍保持挂载。真实浏览器中 exit 播完即卸载，
+    // 由 T6 手动 smoke 验证（不能用本 harness 的 until(!#modal) 作断言）。
+    click($('#btn-codex'));
+    if (!(await until(() => $('#modal'), 1500))) throw new Error('图鉴未打开');
+    click($('#modal-close'));
+    await wait(30);
+    if (!$('#modal')) throw new Error('Modal 没有 exit 生命周期，立即卸载');
+    await wait(1000);   // exit 时长（0.28s）之后——如已卸载说明 exit 提前完成或路径异常
+    out.modalExit = true;
+
     // deploy 相位处理一张手牌；返回是否取得进展。
     // 帧竞争：动作点击落在上一条 act 链（回合横幅等）仍在播的 busy 帧会被吞掉，
     // 用「整段重试」兜底——等链收尾后重新执行一次。
+    // Task 4（虚拟时间适配，2026-08-28 实测）：#optfloat 的 exit 动画在本 harness 下永不
+    // 结算 → 询问已消费后节点残留（含按钮）。故浮层点击用「点击-验证事件增长」闭环
+    // 区分真实询问（消除后必定有行动事件）与残留节点（无 effect，按无浮层继续处理手牌）。
     const drainOne = async () => {
       for (let attempt = 0; attempt < 4; attempt++) {
         const s = st();
-        if ($('#optfloat')) { click($('#optfloat button')); return true; }  // 冲锋等询问浮层
+        if ($('#optfloat')) {
+          const before = game().events.length;
+          click($('#optfloat button'));  // 冲锋等询问浮层
+          if (await until(() => game().events.length > before, 1500)) return true;
+        }
         const before = s.hand[s.curPlayer].length;
         const storeBtn = $('[data-store]');
         if (storeBtn) { click(storeBtn); }                  // 法术：储存无目标选择，必定成功
@@ -100,7 +123,12 @@ const DRIVER = `
       }, 8000)))
         throw new Error('动作链未在 8s 内播完');
       if (s.phase === 'deploy') { await drainOne(); continue; }
-      if ($('#optfloat')) { click($('#optfloat button')); await wait(200); continue; }
+      // 浮层点击闭环（同 drainOne）：真实询问消除后有事件；残留 exit 节点无 effect。
+      if ($('#optfloat')) {
+        const before = game().events.length;
+        click($('#optfloat button'));
+        if (await until(() => game().events.length > before, 1500)) { await wait(200); continue; }
+      }
       if (!hasActor()) { click($('#btn-end')); await wait(500); continue; }
       out.advanced = true;
 
@@ -273,7 +301,8 @@ const parsed = JSON.parse(raw);
 const ok = parsed.error === '' && parsed.deployed && parsed.advanced &&
             parsed.selected && (parsed.attacked || parsed.moved) &&
             parsed.restarted && parsed.staleFxClean &&
-            parsed.motionHandle && parsed.deathOwned;
+            parsed.motionHandle && parsed.deathOwned &&
+            parsed.modalExit;
 if (!ok) {
   console.error('e2e 断言失败，out 对象：');
   console.error(JSON.stringify(parsed, null, 2));

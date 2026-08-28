@@ -1,12 +1,26 @@
 /* Stored.tsx · 法术储存栏（ui.js renderStored 平移为 JSX）
  * 卡类复用 Hand.module.css（.card/.spellCard/.c-* 同构）；释放按钮保留
  * data-cast-stored（评审 N3 e2e 钩子），同样走 runSpellCast。 */
+import { motion } from 'motion/react';
 import { useGame } from '../gameStore.ts';
 import { runSpellCast } from '../interactionStore.ts';
 import { getDef } from '../../engine/data.ts';
 import { SPELL_TARGETS } from '../../engine/spells.ts';
 import hand from './Hand.module.css';
 import side from './SidePanel.module.css';
+
+/* Task 4：stored 卡无 uid（engine 不动），用 WeakMap 提供 UI 稳态 key——
+ * undo 重建对象时 key 变化属合法 replays enter（brief 裁定）。 */
+const storedKeys = new WeakMap<object, number>();
+let nextStoredKey = 1;
+function storedKey(card: object): number {
+  let key = storedKeys.get(card);
+  if (key == null) {
+    key = nextStoredKey++;
+    storedKeys.set(card, key);
+  }
+  return key;
+}
 
 export default function Stored() {
   const loaded = useGame();
@@ -36,20 +50,22 @@ export default function Stored() {
       {arr.map((card, idx) => {
         const def = getDef(card.defId);
         return (
-          <div key={card.defId + '-' + idx} className={`${hand.card} ${hand.spellCard}`} data-card={idx}>
-            <span className={hand.cLimit}>⏳剩 {card.remain} 回合</span>
-            <div className={hand.cHead}>
-              <span className={hand.cEmoji}>{def.emoji}</span>
-              <span className={hand.cName}>{def.name}</span>
-            </div>
-            <div className={hand.cDesc}>{def.short}</div>
-            {st.phase === 'action' && (
-              <div className={hand.cardBtns}>
-                <button className={`${hand.miniBtn} ${hand.miniPurple}`} data-cast-stored={idx}
-                        onClick={() => handleCastStored(idx)}>✨ 释放</button>
+          <motion.div key={storedKey(card)} layout="position">
+            <div className={`${hand.card} ${hand.spellCard}`} data-card={idx}>
+              <span className={hand.cLimit}>⏳剩 {card.remain} 回合</span>
+              <div className={hand.cHead}>
+                <span className={hand.cEmoji}>{def.emoji}</span>
+                <span className={hand.cName}>{def.name}</span>
               </div>
-            )}
-          </div>
+              <div className={hand.cDesc}>{def.short}</div>
+              {st.phase === 'action' && (
+                <div className={hand.cardBtns}>
+                  <button className={`${hand.miniBtn} ${hand.miniPurple}`} data-cast-stored={idx}
+                          onClick={() => handleCastStored(idx)}>✨ 释放</button>
+                </div>
+              )}
+            </div>
+          </motion.div>
         );
       })}
     </div>

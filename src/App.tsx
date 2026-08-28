@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { createGame } from './engine/game.ts';
 import { setGame, getGame, bumpVersion, useGame } from './ui/gameStore.ts';
 import { ask, toast, act, finishChoice, resetSelection, resetAll, getInteraction } from './ui/interactionStore.ts';
@@ -149,8 +150,14 @@ export default function App() {
         <SidePanel restart={restart} onOpenModal={openModal} />
       </main>
       <ToastHost />
-      {modalTab && <CodexModal tab={modalTab} onClose={closeModal} onSwitchTab={openModal} />}
-      {winner != null && <WinMask winner={winner} restart={restart} onReview={review} />}
+      {/* Task 4：整组件 AnimatePresence（exit 播完才卸载）。PiecesLayer 不包（其死亡由
+          fx.ts run 生命周期托管，硬包装会产生内层安 Presence）。 */ }
+      <AnimatePresence>
+        {modalTab && <CodexModal tab={modalTab} onClose={closeModal} onSwitchTab={openModal} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {winner != null && <WinMask winner={winner} restart={restart} onReview={review} />}
+      </AnimatePresence>
     </div>
   );
 }

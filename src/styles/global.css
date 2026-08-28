@@ -46,9 +46,8 @@ body {
 @keyframes blink { 50% { opacity: .35; } }
 @keyframes shieldSpin { 50% { filter: brightness(1.35); } }
 @keyframes wobble { 50% { transform: rotate(-14deg); } }
-/* 模态框/胜利遮罩的入场与辉光：由各 module.css 的 :global 规则按名引用，不能哈希化，留 global */
-@keyframes fadeIn { from { opacity: 0; } }
-@keyframes modalUp { from { transform: translateY(26px) scale(.97); opacity: 0; } }
+/* 胜利遮罩文字辉光：由 WinMask.module.css 的 :global 规则按名引用，不能哈希化，留 global。
+   （Task 4：fadeIn/modalUp 生命周期 keyframes 已迁 Motion 并删除——条目随之移除。） */
 @keyframes winGlow { from { transform: scale(1); } to { transform: scale(1.06); } }
 
 /* ─────────── 主布局 ─────────── */
