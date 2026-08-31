@@ -7,7 +7,9 @@ export interface Cell { x: number; y: number }
 export interface Def { id: number; name: string; emoji: string;
   type: 'follower' | 'spell' | 'base' | 'grave';
   atk: number; hp: number; rng: number; acts: number; mv: number;
-  short: string; desc: string; limit?: number; big?: boolean }
+  short: string; desc: string; limit?: number; big?: boolean;
+  /** 抽到时按概率换成另一形态（名刀 → 刀魂），keepProb 为保持原形态的概率 */
+  form?: { to: number; keepProb: number } }
 
 export const W: number = 9;    // 列数 x ∈ [1,9]
 export const H: number = 13;   // 行数 y ∈ [1,13]
@@ -31,6 +33,7 @@ export const DEFS: Def[] = [
     atk: 0, hp: 60, rng: 6, acts: 0, mv: 0,
     short: '抽到时判定形态：守护灵 or 随人数变强的刀魂。',
     desc: '抽到时判定：1/3 概率召唤成功（0/60/6/0/0，不能行动），它使射程 6 内友方棋子各自能避免一次致命伤害——以 1 血存活（每子限一次）；否则变为「刀魂」40n/25/n/1/1，n 为以其为中心 3×3 范围内随从的数量（含双方与自身，实时计算，攻击力与射程随 n 波动）。',
+    form: { to: 33, keepProb: 1 / 3 },
   },
   {
     id: 4, name: '定炮', emoji: '🎯', type: 'follower',
@@ -43,6 +46,7 @@ export const DEFS: Def[] = [
     atk: 15, hp: 111, rng: 2, acts: 1, mv: 0,
     short: '始终占据 2×2 四格；移动需先蓄势一回合。',
     desc: '始终站四格（2×2 整体）。选择【移动】时第一次为蓄势（获得蓄力条，不移动）；有蓄力条时再选【移动】才可以整体平移一格，移动后蓄力条清零。（攻击范围从其覆盖四格中最近处计算。）',
+    big: true,
   },
   {
     id: 6, name: 'BUFF怪', emoji: '📣', type: 'follower',
@@ -178,10 +182,8 @@ const DEF_BARRIER: Def = { id: -3, name: '路障', emoji: '🚧', type: 'grave',
 const DEF_BLADE: Def = { id: 33, name: '刀魂', emoji: '🌀', type: 'follower', atk: 0, hp: 25, rng: 1, acts: 1, mv: 1,
   short: '名刀的另一种形态，随人潮而强。', desc: '攻击力 40n / 射程 n：n 为以其为中心 3×3 内随从数量（实时计算，含自身与双方）。' };
 
+const SPECIALS: Record<number, Def> = { [-1]: DEF_BASE, [-2]: DEF_GRAVE, [-3]: DEF_BARRIER, [33]: DEF_BLADE };
+
 export function getDef(defId: number): Def {
-  if (defId === -1) return DEF_BASE;
-  if (defId === -2) return DEF_GRAVE;
-  if (defId === -3) return DEF_BARRIER;
-  if (defId === 33) return DEF_BLADE;
-  return DEFS.find((d) => d.id === defId)!;
+  return SPECIALS[defId] ?? DEFS.find((d) => d.id === defId)!;
 }
