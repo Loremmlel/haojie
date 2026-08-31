@@ -2,6 +2,7 @@
  * e2e 钩子（评审 N3）：卡片 data-card/data-idx；释放/储存/弃置按钮
  * data-cast/data-store/data-discard。法术释放走 runSpellCast。 */
 import type { ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { useGame } from '../gameStore.ts';
 import { useInteraction, setInteraction, act, runSpellCast } from '../interactionStore.ts';
 import { getDef, type Def } from '../../engine/data.ts';
@@ -106,16 +107,18 @@ export default function Hand() {
           isSelected ? hand.selected : (st.phase === 'deploy' ? hand.awaiting : ''),
         ].filter(Boolean).join(' ');
         return (
-          <div key={card.uid} className={cls} data-card={idx} data-idx={idx} onClick={() => handleCardClick(idx)}>
-            {def.type === 'spell' && <span className={hand.cLimit}>⏳{def.limit}回合</span>}
-            <div className={hand.cHead}>
-              <span className={hand.cEmoji}>{def.emoji}</span>
-              <span className={hand.cName}>{def.name}</span>
+          <motion.div key={card.uid} layout="position">
+            <div className={cls} data-card={idx} data-idx={idx} onClick={() => handleCardClick(idx)}>
+              {def.type === 'spell' && <span className={hand.cLimit}>⏳{def.limit}回合</span>}
+              <div className={hand.cHead}>
+                <span className={hand.cEmoji}>{def.emoji}</span>
+                <span className={hand.cName}>{def.name}</span>
+              </div>
+              <div className={hand.cStats}>{statLine(def)}</div>
+              <div className={hand.cDesc}>{def.short}</div>
+              {renderButtons(card, idx)}
             </div>
-            <div className={hand.cStats}>{statLine(def)}</div>
-            <div className={hand.cDesc}>{def.short}</div>
-            {renderButtons(card, idx)}
-          </div>
+          </motion.div>
         );
       })}
     </div>

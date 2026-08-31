@@ -4,14 +4,17 @@
   "description": "浩劫 —— 9x13 双人对战回合制棋盘游戏，可构建为单个 HTML 文件",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.13.0" },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/verify-singlefile.mjs",
-    "test": "node --experimental-strip-types --test tests/engine.test.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "motion": "13.1.1",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },

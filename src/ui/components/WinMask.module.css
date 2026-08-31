@@ -1,13 +1,12 @@
 /* WinMask.module.css · 胜利遮罩（自 global.css #winmask 区段平移）
  * #winmask/#win-text/#win-sub 为全局 DOM id（e2e 锚点），样式以 :global 寻址；
- * @keyframes fadeIn/winGlow 由 :global 规则引用，不会随 module 哈希化，须留在 global.css
- * （fadeIn 亦被 CodexModal 的 #modal 引用；winGlow 由 :global(#win-text) 引用）。
+ * Task 4：遮罩入场/出场迁 Motion（App 侧 AnimatePresence），fadeIn keyframe 已删除；
+ * winGlow 保留 CSS（文字循环辉光，不走生命周期）。
  * w1/w2 配色为 module 局部类，挂于 #win-text 上（对齐 v1 #win-text.w1/.w2）。 */
 :global(#winmask) {
   position: fixed; inset: 0; z-index: 200;
   background: rgba(4,6,14,.82); backdrop-filter: blur(8px);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-  animation: fadeIn .5s;
 }
 :global(#win-text) { font-size: 3.2rem; font-weight: 900; letter-spacing: 14px; animation: winGlow 1.6s ease-in-out infinite alternate; }
 :global(#win-sub) { color: var(--ink-dim); letter-spacing: 3px; }
@@ -15,7 +14,10 @@
 .w1 { color: var(--p1); text-shadow: 0 0 40px rgba(56,189,248,.9); }
 .w2 { color: var(--p2); text-shadow: 0 0 40px rgba(251,113,133,.9); }
 
-/* 本地同名再定义（TopBar 约定）：postcss-modules 会把 :global 规则里的 animation
- * 引用哈希化，本文件无同名声明则引用悬空；global.css 另留全局同名副本供跨 module 共享。 */
-@keyframes fadeIn { from { opacity: 0; } }
+/* 本地再定义：:global 规则里的 animation 引用随 module 哈希化，无同名声明即悬空。 */
 @keyframes winGlow { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+/* Task 5：reduce 下 winGlow 静态化——文字保留 w1/w2 静态色与辉光，仅移除缩放循环。 */
+@media (prefers-reduced-motion: reduce) {
+  :global(#win-text) { animation: none; }
+}

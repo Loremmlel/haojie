@@ -1,9 +1,11 @@
 /* Piece.module.css · 棋子结构类与状态外观类（自 global.css 棋子区段平移，仅结构类）。
  * 已删死代码：.neutral（v1 零引用）。
- * 留在 global 的部分：fx 命令式类 .piece.pop-in/.dying/.hit-jolt 与 keyframes popIn/dieAnim/jolt；
- * shieldSpin/wobble 在 global.css 亦留一份（跨 module 共享 keyframes 一律 global）——
+ * Task 3：temporary 棋子 FX（pop-in/dying/hit-jolt 与 keyframes）已迁 fx.ts 的 Motion，
+ * .piece root 只留持久态（transform/filter）过渡；temporary transform 由内层 .motionBody 承接。
  * CSS Modules 会把本文件内的 keyframe 引用哈希化，故必须在本文件内同名再定义一份，
  * 才能让 .shielded/.marked/.charmed 的 animation 指向存在的 keyframes（编译后哈希名一致）。 */
+/* Task 3：root 的 left/top 由 movePieceTo 的 Motion 驱动（无 CSS transition）；
+ * root 只保留持久态（transform/filter）的 CSS 过渡；temporary transform 一律写 .motionBody 内层。 */
 .piece {
   position: absolute;
   left: 0; top: 0;
@@ -14,10 +16,10 @@
   font-size: calc(var(--cell) * .46);
   z-index: 5;
   cursor: pointer;
-  transition: left .32s cubic-bezier(.34,1.3,.5,1), top .32s cubic-bezier(.34,1.3,.5,1),
-              transform .18s, opacity .3s, filter .3s;
+  transition: transform .18s, opacity .3s, filter .3s;
   will-change: left, top;
 }
+.motionBody { position: absolute; inset: 0; border-radius: inherit; }
 .face { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
 .own0 .face {
   background: radial-gradient(circle at 32% 28%, #7dd3fc, #0ea5e9 58%, #0c4a6e);
@@ -78,3 +80,8 @@
 .big5 .face { border-radius: 18%; font-size: calc(var(--cell) * .8); }
 .selected { transform: scale(1.12); z-index: 8; }
 .selected .face { box-shadow: 0 0 0 3px var(--gold), 0 0 20px rgba(251,191,36,.6) !important; }
+
+/* Task 5：reduce 下持续动画静态化——护盾光/标记/魅惑只保留颜色与图标态，移除循环动画。 */
+@media (prefers-reduced-motion: reduce) {
+  .shielded .face, .marked::after, .charmed::before { animation: none; }
+}

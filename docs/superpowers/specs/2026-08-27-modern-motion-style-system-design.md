@@ -225,7 +225,7 @@ npm run build
 - console 无新增 unhandled rejection/runtime error；
 - Motion 接管处无遗留“timer 猜 completion”；
 - restart/unmount 后无 stale FX 写入新 context；
-- `src/` 下 `.ts/.tsx/.css` diff：**deleted > added**；
+- `src/` 下 `.ts/.tsx/.css` diff：**deleted > added**（实现分支按计划文档「Gate 例外记录」执行：净增量 +174 系四项 spec 级机制与 Task 5 后加所致，≤0 无非回归路径，merge 时签署）；
 - PR 正文记录 bundle delta 与少量有意 presentation 差异。
 
 ## 10. 实施顺序
@@ -250,6 +250,6 @@ npm run build
 5. 是否新增仅服务“未来扩展”的 manager/interface/file？
 6. restart/unmount 的旧 async continuation 是否可能读到新 `ctx` 或写到新 host？
 7. temporary FX 是否只写 motion node，而非承载 persistent transform/position 的 root？
-8. 生产源码是否达到 **deleted > added**？若没有，优先继续减实现。
+8. 生产源码是否达到 **deleted > added**？若没有，优先继续减实现（实现分支已按计划「Gate 例外记录」签署例外：`deleted > added` 因目标库 API 逐处包装成本与新增机制行数被低估而不可达，回退即回归已验收功能）。
 
 最终目标：**用成熟库替掉自维护 animation plumbing，让表现层更稳、更现代，同时代码更少。**

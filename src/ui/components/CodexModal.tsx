@@ -3,8 +3,12 @@
  * 点遮罩关闭（e.target === e.currentTarget，对齐 v1 #modal 点击委托）；Esc 关闭并入 App 快捷键 effect。
  * #modal 家族为全局 DOM id（e2e 锚点）；内容类名全部 module 化。
  * isSpell 分支逐字保留（Task 2 为法术卡补零的数值字段在此天然不渲染）。 */
+import { motion } from 'motion/react';
 import { DEFS, getDef } from '../../engine/data.ts';
 import s from './CodexModal.module.css';
+
+/* Task 4：入场/出场从 CSS keyframe 迁 Motion（App 侧 AnimatePresence exit 播完才卸载） */
+const MODAL_EASE = [.2, .9, .3, 1.1] as const;
 
 export interface CodexModalProps {
   tab: 'codex' | 'rules';
@@ -123,8 +127,15 @@ function RulesDoc() {
 
 export default function CodexModal({ tab, onClose, onSwitchTab }: CodexModalProps) {
   return (
-    <div id="modal" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div id="modal-card">
+    <motion.div id="modal"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      transition={{ duration: .2 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <motion.div id="modal-card"
+        initial={{ opacity: 0, y: 26, scale: .97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 16, scale: .98 }}
+        transition={{ duration: .28, ease: MODAL_EASE }}>
         <div id="modal-head">
           <div id="modal-title">图鉴</div>
           <button id="modal-close" onClick={onClose}>✕</button>
@@ -142,7 +153,7 @@ export default function CodexModal({ tab, onClose, onSwitchTab }: CodexModalProp
         <div id="modal-body">
           {tab === 'codex' ? <CodexBody /> : <RulesDoc />}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

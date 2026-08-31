@@ -6,18 +6,14 @@
 :root {
   /* 主题 token（本作为深色设计，直接固定深色调） */
   --bg-0: #0b0e17;
-  --bg-1: #111527;
   --bg-2: #1a2038;
   --bg-3: #232b4a;
   --ink: #e8ecf8;
   --ink-dim: #9aa3c0;
   --ink-faint: #5d6580;
   --p1: #38bdf8;          /* 蓝方主色 */
-  --p1-deep: #0c4a6e;
   --p2: #fb7185;          /* 红方主色 */
-  --p2-deep: #881337;
   --gold: #fbbf24;
-  --green: #34d399;
   --purple: #c084fc;
   --danger: #f87171;
   --line: rgba(148, 163, 216, .16);
@@ -41,15 +37,6 @@ body {
 }
 
 #app { height: 100vh; display: flex; flex-direction: column; }
-
-/* ─────────── 共享 keyframes（被 module 类按名引用 / 跨 module 共享，一律留 global）─────────── */
-@keyframes blink { 50% { opacity: .35; } }
-@keyframes shieldSpin { 50% { filter: brightness(1.35); } }
-@keyframes wobble { 50% { transform: rotate(-14deg); } }
-/* 模态框/胜利遮罩的入场与辉光：由各 module.css 的 :global 规则按名引用，不能哈希化，留 global */
-@keyframes fadeIn { from { opacity: 0; } }
-@keyframes modalUp { from { transform: translateY(26px) scale(.97); opacity: 0; } }
-@keyframes winGlow { from { transform: scale(1); } to { transform: scale(1.06); } }
 
 /* ─────────── 主布局 ─────────── */
 #layout {
@@ -115,20 +102,9 @@ body {
 @keyframes healPulse { 50% { box-shadow: 0 0 12px rgba(52,211,153,.45); } }
 .cell.sel-hl { border-color: var(--gold); box-shadow: 0 0 14px rgba(251,191,36,.5); }
 
-/* ─────────── 棋子 fx 命令式类（Global Constraints 第 2 条：留 global，Task 8 Step 5 复核）─────────── */
-/* 入场 / 死亡动画 */
-.piece.pop-in { animation: popIn .42s cubic-bezier(.34,1.56,.64,1); }
-@keyframes popIn { 0% { transform: scale(.15) translateY(-14px); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-.piece.dying { animation: dieAnim .5s ease-in forwards; pointer-events: none; z-index: 20; }
-@keyframes dieAnim {
-  0% { transform: scale(1); filter: brightness(2); }
-  100% { transform: scale(.2) rotate(80deg); opacity: 0; filter: brightness(3) blur(2px); }
-}
-.piece.hit-jolt { animation: jolt .3s; }
-@keyframes jolt {
-  0%,100% { transform: translate(0,0); }
-  25% { transform: translate(-4px,2px) scale(.95); }
-  55% { transform: translate(4px,-2px) scale(.97); }
+/* Task 5：reduce 下高亮脉冲静态化——保留颜色/边框态（上面基础规则），仅移除脉冲动画。 */
+@media (prefers-reduced-motion: reduce) {
+  .cell.dep-ok, .cell.atk-ok, .cell.sk-ok, .cell.heal-ok { animation: none; }
 }
 
 /* ─────────── 特效层 ─────────── */
@@ -136,8 +112,7 @@ body {
 
 .fly-num {
   position: absolute; z-index: 50; font-weight: 900; font-size: calc(var(--cell) * .34);
-  transform: translate(-50%, -50%);
-  animation: floatUp 1s cubic-bezier(.2,.7,.4,1) forwards;
+  translate: -50% -50%;             /* Task 2：静态居中用 CSS translate，Motion 独享 transform */
   text-shadow: 0 2px 6px rgba(0,0,0,.9), 0 0 10px currentColor;
   white-space: nowrap;
 }
@@ -145,20 +120,14 @@ body {
 .fly-num.crit { color: #ffb703; font-size: calc(var(--cell) * .46); }
 .fly-num.heal { color: #4ade80; }
 .fly-num.buff { color: var(--purple); }
-@keyframes floatUp {
-  0% { opacity: 0; transform: translate(-50%, -30%) scale(.5); }
-  18% { opacity: 1; transform: translate(-50%, -60%) scale(1.15); }
-  100% { opacity: 0; transform: translate(-50%, -190%) scale(1); }
-}
 
+/* 静态形状（Task 3：动作由 transient Motion 驱动——scaleX/rotate/opacity，transform-origin 留 CSS） */
 .slash {
   position: absolute; z-index: 49; height: 4px; border-radius: 4px;
   background: linear-gradient(90deg, transparent, #fff 30%, var(--danger) 55%, transparent);
   transform-origin: left center;
-  animation: slashGo .26s ease-out forwards;
   filter: drop-shadow(0 0 8px rgba(255,80,80,.9));
 }
-@keyframes slashGo { 0% { transform: scaleX(0) rotate(var(--rot)); } 100% { transform: scaleX(1) rotate(var(--rot)); opacity: .1; } }
 
 .bolt {
   position: absolute; z-index: 48; width: 14px; height: 14px; border-radius: 50%;
@@ -169,62 +138,34 @@ body {
 .ring {
   position: absolute; z-index: 47; border-radius: 50%;
   border: 3px solid currentColor;
-  transform: translate(-50%, -50%);
-  animation: ringGrow .55s cubic-bezier(.2,.8,.3,1) forwards;
+  translate: -50% -50%;             /* Task 2：Motion 直接驱动 width/height/opacity */
 }
-@keyframes ringGrow { 0% { width: 8px; height: 8px; opacity: 1; } 100% { width: calc(var(--ring-w)); height: calc(var(--ring-w)); opacity: 0; } }
 
 .boom {
   position: absolute; z-index: 46; width: 12px; height: 12px; border-radius: 3px;
-  transform: translate(-50%, -50%) rotate(45deg);
-  animation: boomFly .7s cubic-bezier(.15,.6,.4,1) forwards;
-}
-@keyframes boomFly {
-  0% { opacity: 1; transform: translate(-50%,-50%) rotate(0deg) scale(1); }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(300deg) scale(.3); }
+  translate: -50% -50%;             /* Task 2：Motion 直接驱动 x/y/rotate/scale/opacity */
 }
 
 .spell-cast {
   position: absolute; z-index: 51; font-size: calc(var(--cell) * .8);
-  transform: translate(-50%, -50%);
-  animation: spellPop .8s cubic-bezier(.2,.9,.3,1.2) forwards;
+  translate: -50% -50%;             /* Task 2：Motion 直接驱动 scale/rotate/y/opacity */
   filter: drop-shadow(0 0 12px rgba(192,132,252,.9));
-}
-@keyframes spellPop {
-  0% { transform: translate(-50%,-50%) scale(.2) rotate(-30deg); opacity: 0; }
-  35% { transform: translate(-50%,-50%) scale(1.3) rotate(6deg); opacity: 1; }
-  100% { transform: translate(-50%,-90%) scale(1); opacity: 0; }
-}
-
-body.shake #board-outer { animation: shakeIt .38s; }
-@keyframes shakeIt {
-  0%,100% { transform: translate(0,0); }
-  20% { transform: translate(-7px,4px); }
-  45% { transform: translate(6px,-5px); }
-  70% { transform: translate(-4px,2px); }
 }
 
 /* 回合横幅 */
 #banner {
   position: absolute; left: 50%; top: 44%;
-  transform: translateX(-50%);
+  translate: -50% 0;                /* Task 2：Motion 直接驱动 opacity/scaleX */
   padding: 14px 46px;
   font-size: 1.5rem; font-weight: 900; letter-spacing: 6px; white-space: nowrap;
   background: linear-gradient(90deg, transparent, rgba(10,14,28,.92) 18% 82%, transparent);
   border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
   z-index: 60;
-  animation: bannerSweep 1.15s cubic-bezier(.25,.8,.3,1) forwards;
 }
 #banner.b1 { color: var(--p1); text-shadow: 0 0 22px rgba(56,189,248,.9); }
 #banner.b2 { color: var(--p2); text-shadow: 0 0 22px rgba(251,113,133,.9); }
 #banner.bwin { color: var(--gold); text-shadow: 0 0 26px rgba(251,191,36,1); }
 #banner.hidden { display: none; }
-@keyframes bannerSweep {
-  0% { opacity: 0; transform: translateX(-50%) scaleX(.2); }
-  18% { opacity: 1; transform: translateX(-50%) scaleX(1); }
-  80% { opacity: 1; }
-  100% { opacity: 0; transform: translateX(-50%) scaleX(1.05); }
-}
 
 /* ─────────── 动作栏 ───────────
    #btns 网格与 .btn/.btn-primary/.btn-danger 基类留 global：ActionBar 与 WinMask

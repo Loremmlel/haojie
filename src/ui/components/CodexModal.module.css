@@ -1,13 +1,11 @@
 /* CodexModal.module.css · 图鉴/规则模态框（自 global.css 的 #modal 家族、.cx- 系类、.rules-doc 区段平移）
  * #modal 家族为全局 DOM id（e2e 锚点），样式以 :global 寻址；
- * @keyframes fadeIn/modalUp 由 :global 规则引用，不会随 module 哈希化，须留在 global.css
- * （modalUp 亦被 OptionFloat.module.css 的 :global(#optfloat) 全局引用）。
- * 组件卸载即关闭，无 .hidden 切换态。 */
+ * Task 4：入场/出场迁 Motion（App 侧 AnimatePresence exit 播完才卸载），
+ * 生命周期 keyframes（fadeIn/modalUp）已删除；组件卸载即关闭，无 .hidden 切换态。 */
 :global(#modal) {
   position: fixed; inset: 0; z-index: 100;
   background: rgba(4,6,14,.78); backdrop-filter: blur(6px);
   display: flex; align-items: center; justify-content: center;
-  animation: fadeIn .2s;
 }
 :global(#modal-card) {
   width: min(1060px, 94vw); height: min(760px, 90vh);
@@ -15,7 +13,6 @@
   border: 1px solid rgba(148,163,216,.3); border-radius: 18px;
   box-shadow: 0 30px 90px rgba(0,0,0,.7);
   display: flex; flex-direction: column; overflow: hidden;
-  animation: modalUp .28s cubic-bezier(.2,.9,.3,1.1);
 }
 :global(#modal-head) { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 8px; }
 :global(#modal-title) { font-size: 1.2rem; font-weight: 900; letter-spacing: 3px; color: var(--gold); }
@@ -69,8 +66,3 @@
   background: var(--bg-3); border: 1px solid var(--line); border-radius: 5px;
   padding: 0 6px; font-size: .78rem; color: var(--ink);
 }
-
-/* 本地同名再定义（TopBar 约定）：postcss-modules 会把 :global 规则里的 animation
- * 引用哈希化，本文件无同名声明则引用悬空；global.css 另留全局同名副本供跨 module 共享。 */
-@keyframes fadeIn { from { opacity: 0; } }
-@keyframes modalUp { from { transform: translateY(26px) scale(.97); opacity: 0; } }

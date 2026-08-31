@@ -38,3 +38,8 @@
 .miniBtn:hover { filter: brightness(1.3); }
 .miniGold { background: linear-gradient(90deg, #92400e, #b45309); border-color: var(--gold); }
 .miniPurple { background: linear-gradient(90deg, #5b21b6, #7c3aed); border-color: var(--purple); }
+
+/* Task 5：reduce 下呼吸动画静态化——选中/待命保留静态边框与辉光态，仅移除呼吸循环。 */
+@media (prefers-reduced-motion: reduce) {
+  .selected, .awaiting { animation: none; }
+}

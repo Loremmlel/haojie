@@ -34,7 +34,7 @@ export default function ActionBar({ restart, onOpenModal }: {
               onClick={handleUndo}>↩ 悔棋</button>
       <button id="btn-codex" className="btn" onClick={() => onOpenModal('codex')}>📖 图鉴</button>
       <button id="btn-rules" className="btn" onClick={() => onOpenModal('rules')}>📐 规则</button>
-      <button id="btn-restart" className="btn btn-danger" disabled={ia.busy}
+      <button id="btn-restart" className="btn btn-danger" disabled={ia.choice != null}
               onClick={handleRestart}>⟳ 重开</button>
     </div>
   );

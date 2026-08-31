@@ -52,10 +52,14 @@ export function resetAll() {
 export async function act(fn: (g: Game) => Promise<unknown>) {
   const g = getGame();
   if (!g || st.busy) return;
+  // 不变量（PiecesLayer.isDying 依赖，勿扰此序）：busy 同步 notify → React 渲染
+  // busy/dead 必须先于 playChain 消费事件。死亡事件由 fn 同步入列、dead 同步置位；
+  // await fn(g) 让出微任务时 React 批量 flush 完成，随后 playChain 才消费——若在此
+  // 插入 await 或改动批量策略，渲染会晚于事件消费，尸体在死亡 FX 前被卸载。
   setInteraction({ busy: true });
   try {
     await fn(g);
-    await playChain(g);        // Task 8 前为空实现：async () => {}
+    await playChain(g);
     bumpVersion();
   } catch (err) {
     console.error(err);
