@@ -15,6 +15,8 @@ import type { Piece, GameState, ChoiceSpec, ChoiceResult } from '../src/engine/s
 import { nearestDist, effRange } from '../src/engine/rules.ts';
 import { rndInt } from '../src/engine/rng.ts';
 import { SPELL_TARGETS } from '../src/engine/spells.ts';
+import { readFileSync, readdirSync } from 'node:fs';
+import { EFFECTS, getEffect } from '../src/engine/effects.ts';
 
 /**
  * 极简断言器（非断言函数——直接 assert.ok 带 `asserts value`，
@@ -395,4 +397,26 @@ test('rules: effRange 非刀魂返回静态射程', () => {
   const st = newGame(2);
   const p = makePiece(st, 0, 9, 1, 1); st.pieces.push(p);   // 射手 rng=5
   assert.equal(effRange(st, p), 5);
+});
+
+/* ═══════════ 守卫测试（Task 8）：效果注册表完备 + 零 defId 字面量 ═══════════ */
+
+test('效果注册表覆盖全部棋子（含特殊单位兜底）', () => {
+  for (const def of DEFS) {
+    if (def.type === 'follower') {
+      assert.ok(EFFECTS[def.id], `缺少效果注册：${def.name}(${def.id})`);
+    }
+  }
+  assert.ok(EFFECTS[33], '缺少效果注册：刀魂(33)');
+  // 特殊单位经 getEffect 兜底不崩
+  assert.ok(getEffect(-1) && getEffect(-2) && getEffect(-3), '特殊单位应有默认兜底');
+});
+
+test('引擎源码无 defId 字面量硬编码分支', () => {
+  const dir = new URL('../src/engine/', import.meta.url);
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.ts')) continue;
+    const src = readFileSync(new URL(name, dir), 'utf8');
+    assert.ok(!/defId\s*(===|!==)\s*-?\d/.test(src), `${name} 含 defId 字面量分支`);
+  }
 });

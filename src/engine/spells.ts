@@ -8,8 +8,9 @@ import { PNAME, ev, pushLog, pieceAt,
          type Session, type GameState, type Piece, type ChoiceSpec, type ChoiceResult, type Owner } from './state.ts';
 import { deployCells } from './rules.ts';
 import { dealDamage, killPiece, flushDeaths, deployPiece } from './engine.ts';
-import { rnd, rndInt } from './rng.ts';
-import type { HandlerCtx } from './abilities.ts';
+import { resolveDrawDefId } from './effects.ts';
+import { rndInt } from './rng.ts';
+import type { HandlerCtx } from './types.ts';
 
 /** 己方随从（不含基地）——v1 与 abilities.js 共享作用域，ESM 下 spells.ts 各自持有同构副本 */
 function myFollowers(state: GameState, owner: number): Piece[] {
@@ -125,8 +126,7 @@ CAST[25] = async (ctx, s, owner, got) => {
 
 /** 抽一枚并处理（随从→部署 / 法术→入库）。供 25 号使用。 */
 async function summonOnce(ctx: HandlerCtx, s: Session, owner: number): Promise<void> {
-  let defId = rndInt(s.state, 1, 26);
-  if (defId === 3 && rnd(s.state) >= 1 / 3) defId = 33; // 名刀形态判定
+  const defId = resolveDrawDefId(s.state, rndInt(s.state, 1, 26));
   const def = getDef(defId);
   pushLog(s.state, `♻️ 重铸召唤：【${def.name}】${def.emoji}`, 'l-impt');
   if (def.type === 'spell') {

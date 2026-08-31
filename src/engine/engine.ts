@@ -1,23 +1,22 @@
 /* ═══════════════ engine.ts · 伤害 / 治疗 / 死亡管线 ═══════════════
- * 所有伤害统一经过 dealDamage，依次结算：
- *   金身免疫 → 策反倒戈 → 厚脸皮正面减免 → 扣血 →
- *   投石机标记引爆 → 名刀守护 → 死亡遗言入队 → 转化器反弹
- * （管线顺序注释以代码实际顺序为准，评审 m2）
+ * 所有伤害统一经过 dealDamage，依次结算（顺序与 v1 逐字节一致）：
+ *   金身免疫 → 策反倒戈 → 厚脸皮正面减免（钩子）→ 扣血 →
+ *   投石机标记引爆（通用状态步骤）→ 名刀守护（全局钩子询问）→
+ *   死亡遗言入队 → 转化器反弹（钩子）
+ * 效果分发一律经 getEffect(defId)，defId 字面量已归零（见 data.ts 守卫）。
  * ═══════════════════════════════════════════════════════════════ */
 
 import { getDef } from './data.ts';
-import { rnd } from './rng.ts';
 import { PNAME, ev, pushLog, makePiece, pieceByUid,
          type Session, type GameState, type Piece, type Owner } from './state.ts';
-import { effAtk, effRange, effActions, isFrontal, nearestDist } from './rules.ts';
-import { DEATHRATTLES, type HandlerCtx } from './abilities.ts';
+import { getEffect, effAtk } from './effects.ts';
+import type { HandlerCtx } from './types.ts';
 
 /**
  * 对目标造成伤害。
  * @param src  来源棋子（可为 null，如法术直接伤害）
  * @param opts {hit:是否为攻击命中, isMark:标记引爆, noCounter:禁止反弹,
- *              noGuard:无视名刀守护, crit:暴击标记（performAttack 掷骰后传入）}
- * 注：opts.crit 为 brief Interfaces 未列但 performAttack 必需的最小补项（代码否则无法编译）。
+ *              noGuard:无视名刀守护, crit:暴击标记}
  */
 export async function dealDamage(s: Session, target: Piece, amount: number,
   src: Piece | null,
@@ -25,16 +24,16 @@ export async function dealDamage(s: Session, target: Piece, amount: number,
   opts = opts || {};
   if (!target || target.dead || !(amount > 0)) return;
 
-  // ── 金身：不受任何伤害
+  // ── 金身：不受任何伤害（通用状态步骤）
   if (target.shieldUntil > s.state.turnCounter) {
     ev(s, { type: 'block', uid: target.uid });
     pushLog(s.state, `🛡️ ${getDef(target.defId).name} 处于金身状态，免疫了 ${amount} 点伤害！`, 'l-impt');
     return;
   }
 
-  // ── 策反：首次受击时收编攻击者（本次伤害落空）
+  // ── 策反：首次受击时收编攻击者（通用状态步骤；基地不可被策反）
   if (src && target.charmFrom && s.state.turnCounter >= target.charmFrom && s.state.turnCounter < target.charmTo
-      && src.owner !== target.owner && src.defId !== -1) {
+      && src.owner !== target.owner && getDef(src.defId).type !== 'base') {
     target.charmFrom = 0; target.charmTo = 0;
     const oldOwner = src.owner;
     src.owner = target.owner;
@@ -44,20 +43,17 @@ export async function dealDamage(s: Session, target: Piece, amount: number,
     return;
   }
 
-  // ── 厚脸皮：来自正面的攻击伤害至多 10
-  let dmg = amount;
-  let frontal = false;
-  if (src && opts.hit && target.defId === 24 && isFrontal(src, target)) {
-    dmg = Math.min(dmg, 10);
-    frontal = true;
-  }
+  // ── 厚脸皮：来自正面的攻击伤害至多 10（钩子）
+  const mod = getEffect(target.defId).modifyIncomingDamage(s.state, target, amount, src, opts);
+  const dmg = mod.amount;
+  const frontal = mod.frontal;
 
   target.hp -= dmg;
   ev(s, { type: 'damage', uid: target.uid, amount: dmg, frontal, crit: opts.crit || false });
 
-  // ── 投石机标记：被“标记方另一枚非投石机棋子”再次命中时引爆
+  // ── 投石机标记：被“标记方另一枚非投石机棋子”再次命中时引爆（通用状态步骤）
   if (opts.hit && src && target.mark10 && !opts.isMark &&
-      src.owner === target.mark10.owner && src.defId !== 10 && !target.dead) {
+      src.owner === target.mark10.owner && !getEffect(src.defId).isCatapult && !target.dead) {
     const mk = target.mark10;
     target.mark10 = null;
     pushLog(s.state, `🪨 投石机标记被引爆！`);
@@ -65,7 +61,7 @@ export async function dealDamage(s: Session, target: Piece, amount: number,
   }
   if (target.dead) return;
 
-  // ── 致命伤害：名刀守护
+  // ── 致命伤害：名刀守护（全局钩子询问）
   if (target.hp <= 0) {
     if (!opts.noGuard && !target.guardUsed && hasBladeGuard(s.state, target)) {
       target.guardUsed = true;
@@ -78,30 +74,26 @@ export async function dealDamage(s: Session, target: Piece, amount: number,
     return;
   }
 
-  // ── 伤害转化器：受到友方棋子伤害时反弹等量给射程内敌人
-  if (src && target.defId === 16 && src.owner === target.owner && !opts.noCounter) {
-    ev(s, { type: 'counter', uid: target.uid });
-    pushLog(s.state, `🔄 伤害转化器将 ${dmg} 点友方伤害转化为反击！`);
-    const foes = s.state.pieces.filter((q) => !q.dead && q.owner !== target.owner &&
-                                           nearestDist(target, q) <= effRange(s.state, target));
-    for (const f of foes) await dealDamage(s, f, dmg, target, { noCounter: true });
-  }
+  // ── 伤害转化器（钩子；友伤分支按规格剔除“可被友方攻击”机制、忠实迁移现有逻辑）
+  await getEffect(target.defId).onDamaged(s, target, dmg, src, opts);
 }
 
-/** 目标是否有己方名刀（本体形态）守护 */
+/** 目标是否有己方名刀（本体形态）守护 —— 遍历询问全局钩子 */
 export function hasBladeGuard(st: GameState, target: Piece): boolean {
-  return st.pieces.some((q) => !q.dead && q.defId === 3 && q.owner === target.owner &&
-                                  nearestDist(q, target) <= 6);
+  for (const q of st.pieces) {
+    if (q.dead || q.owner !== target.owner) continue;
+    if (getEffect(q.defId).guardsAlly(st, q, target)) return true;
+  }
+  return false;
 }
 
-/** 治疗（回满血会引爆投石机标记） */
+/** 治疗（回满血会引爆投石机标记）—— 通用，无 defId 分支 */
 export async function heal(s: Session, target: Piece, amount: number): Promise<void> {
   if (!target || target.dead || !(amount > 0)) return;
   const real = Math.min(amount, target.maxHp - target.hp);
   if (real <= 0) return;
   target.hp += real;
   ev(s, { type: 'heal', uid: target.uid, amount: real });
-  // 回满血触发投石机标记
   if (target.hp >= target.maxHp && target.mark10) {
     const mk = target.mark10;
     target.mark10 = null;
@@ -110,69 +102,45 @@ export async function heal(s: Session, target: Piece, amount: number): Promise<v
   }
 }
 
-/** 击杀：标记死亡 + 记录遗言 + 杀手升级 */
+/** 击杀：标记死亡 + 记录遗言 + 杀手升级（钩子） */
 export async function killPiece(s: Session, victim: Piece, killer: Piece | null): Promise<void> {
   if (victim.dead) return;
   victim.dead = true;
   victim.hp = 0;
   ev(s, { type: 'death', uid: victim.uid, defId: victim.defId });
 
-  // 杀手击杀升级
-  if (killer && !killer.dead && killer.defId === 26 && victim.owner !== killer.owner) {
-    killer.killCount++;
-    const stage = ((killer.killCount - 1) % 4) + 1;
-    if (stage === 1 || stage === 4) {
-      killer.maxHp += 10;
-      killer.hp = Math.min(killer.maxHp, killer.hp + 10);
-      pushLog(s.state, `🔪 杀手完成第 ${killer.killCount} 杀：+10 血量上限并回复 10 血！（${killer.hp}/${killer.maxHp}）`, 'l-impt');
-    } else if (stage === 2) {
-      killer.atk += 5;
-      pushLog(s.state, `🔪 杀手完成第 ${killer.killCount} 杀：+5 攻击力！（atk ${killer.atk}）`, 'l-impt');
-    } else {
-      killer.range += 1;
-      pushLog(s.state, `🔪 杀手完成第 ${killer.killCount} 杀：+1 攻击范围！（射程 ${killer.range}）`, 'l-impt');
-    }
-    ev(s, { type: 'buff', uid: killer.uid });
+  if (killer && !killer.dead && victim.owner !== killer.owner) {
+    await getEffect(killer.defId).onKill(s, killer, victim);
   }
 
   if (getDef(victim.defId).type !== 'base' && getDef(victim.defId).type !== 'grave') {
     s.pendingDeaths.push({ victim, killer });
-  } else if (victim.defId === -1) {
-    // win 事件：v1 在 checkWin 内 ev('win')，但 checkWin 现为 (st) 纯查询、无 Session 通道，
-    // 故补发于调用方（此处即基地阵亡的判定点）。checkWin 仅在新判定/变更 winner 时返回
-    // 非 null，调用方尾部再次 checkWin 返回 null、不再补发——每次胜负恰好一个 win 事件
-    // （v1 每次调用都 ev('win') 造成重复，规格 N2「onWin 唯一属主」据此收敛）。
+  } else if (getDef(victim.defId).type === 'base') {
     const w = checkWin(s.state);
     if (w != null) ev(s, { type: 'win', winner: w });
   }
 }
 
-/** 逐个结算死亡遗言（可能异步等待玩家选择） */
+/** 逐个结算死亡遗言（可能异步等待玩家选择）—— 经 getEffect 分发 */
 export async function flushDeaths(ctx: HandlerCtx, s: Session): Promise<void> {
   while (s.pendingDeaths.length) {
-    const { victim, killer } = s.pendingDeaths.shift()!; // while 条件保证非空
-    const fn = DEATHRATTLES[victim.defId];
-    if (fn) await fn(ctx, s, victim, killer);
+    const { victim, killer } = s.pendingDeaths.shift()!;
+    await getEffect(victim.defId).onDeath(ctx, s, victim, killer);
   }
 }
 
-/**
- * 胜负判定：纯 (st) 查询。返回「本次调用新判定或变更出的 winner」（无变化返回 null）——
- * 调用方仅在返回值非 null 时补发 win 事件，保证每次胜利恰好一个 win 事件。
- * v1 每次调用都 ev('win')（killPiece 与调用方尾部各一次），迁移后收敛为
- * winner 变化一次一发：正常单杀 1 个事件，双杀（winner 从 A 翻转为 B）仍各发一次。
- */
+/** 胜负判定：纯 (st) 查询，返回「本次调用新判定或变更出的 winner」 */
 export function checkWin(st: GameState): number | null {
   const prev = st.winner;
-  const b0 = st.pieces.find((p) => p.defId === -1 && p.owner === 0);
-  const b1 = st.pieces.find((p) => p.defId === -1 && p.owner === 1);
-  if (!b0 || !b1) return null; // 单元测试等无基地场景不判负
+  const b0 = st.pieces.find((p) => getDef(p.defId).type === 'base' && p.owner === 0);
+  const b1 = st.pieces.find((p) => getDef(p.defId).type === 'base' && p.owner === 1);
+  if (!b0 || !b1) return null;
   const d0 = b0.hp <= 0, d1 = b1.hp <= 0;
   if (d0 && d1) { st.winner = 1 - st.curPlayer; }
   else if (d0) { st.winner = 1; }
   else if (d1) { st.winner = 0; }
   if (st.winner !== prev) {
-    const w = st.winner!; // 变化分支中 winner 必非 null（判定只会把它设为 0/1，不会设回 null）
+    const w = st.winner!;
     st.phase = 'over';
     pushLog(st, `🏆 ${PNAME[w]}摧毁了对方基地，获得胜利！`, 'l-impt');
     return w;
@@ -180,13 +148,11 @@ export function checkWin(st: GameState): number | null {
   return null;
 }
 
-/** 自 game.js 上移：攻击结算核心（死吧/掷骰/投石机挂标/射手记录/定炮清充能）。
- *  需要 ctx：内部经 flushDeaths 结算死亡遗言（奶妈遗言要 choose）。
- *  无返回值（v1 语义）；成功与否由 state 变化体现。 */
+/** 攻击结算核心。钩子挂点：onAttack（接管）→ modifyAttackDamage（掷骰）→ dealDamage → onAttackDone */
 export async function performAttack(ctx: HandlerCtx, s: Session, p: Piece, target: Piece): Promise<void> {
   ev(s, { type: 'attack', uid: p.uid, tuid: target.uid });
 
-  // ── 死吧！：下回合命中的第一个敌方立即死亡
+  // ── 死吧！：下回合命中的第一个敌方立即死亡（通用状态步骤）
   if (p.reaperFrom && s.state.turnCounter === p.reaperFrom &&
       getDef(target.defId).type !== 'base') {
     p.reaperFrom = 0; p.reaperTo = 0;
@@ -202,57 +168,31 @@ export async function performAttack(ctx: HandlerCtx, s: Session, p: Piece, targe
     }
   }
 
-  // ── 伤害掷骰
-  let dmg = effAtk(s.state, p);
-  let crit = false;
-  if (p.defId === 1) {
-    const r = rnd(s.state);
-    if (r < 1 / 12) { dmg += 60; crit = true; }
-    else if (r < 1 / 4) { dmg += 20; }
+  const eff = getEffect(p.defId);
+
+  // ── 攻击接管（投石机挂标），未接管则走伤害掷骰 → 扣血
+  const handled = await eff.onAttack(ctx, s, p, target);
+  if (!handled) {
+    const dmg = effAtk(s.state, p);
+    const mod = eff.modifyAttackDamage(s.state, p, target, dmg);
+    await dealDamage(s, target, mod.dmg, p, { hit: true, crit: mod.crit });
   }
 
-  // ── 投石机：零伤挂标
-  if (p.defId === 10) {
-    pushLog(s.state, `🪨 投石机砸中了【${getDef(target.defId).name}】，附上引信标记！`);
-    if (!target.dead) {
-      target.mark10 = { owner: p.owner, srcUid: p.uid, expires: s.state.turnCounter + 2 };
-      ev(s, { type: 'mark', uid: target.uid });
-    }
-  } else {
-    await dealDamage(s, target, dmg, p, { hit: true, crit });
-  }
+  // ── 攻击后（射手记录 / 定炮清充能）
+  await eff.onAttackDone(ctx, s, p, target);
 
-  if (p.defId === 9) p.hitThisTurn.push(target.uid);
-  if (p.defId === 4) p.charge = 0;
   await flushDeaths(ctx, s);
   const w = checkWin(s.state);
   if (w != null) ev(s, { type: 'win', winner: w });
 }
 
-/** 自 game.js 上移：底层落子 + 冲锋询问。需要 ctx：询问走 ctx.choose。
- *  spells.ts 的 summonOnce 与 game.ts 的 deployFollower 都调用它。 */
+/** 底层落子 + 冲锋询问（钩子）。spells.ts 与 game.ts 都调用它。 */
 export async function deployPiece(ctx: HandlerCtx, s: Session, owner: number,
   defId: number, x: number, y: number): Promise<Piece> {
   const p = makePiece(s.state, owner as Owner, defId, x, y);
   s.state.pieces.push(p);
   ev(s, { type: 'deploy', uid: p.uid });
   pushLog(s.state, `${PNAME[owner]}部署【${getDef(defId).name}】于 (${x},${y})`);
-  if (defId === 1) {
-    const choice = await ctx.choose({
-      kind: 'option',
-      options: [
-        { label: '⚡ 获得冲锋（−10 血）', value: 'charge' },
-        { label: '🛡️ 保持满血', value: 'normal' },
-      ],
-      hint: '冲锋怪：是否牺牲 10 血量换取部署当回合即可行动？',
-    });
-    if (choice === 'charge') {
-      p.hp -= 10;
-      p.justDeployed = false;
-      p.apLeft = effActions(s.state, p);
-      pushLog(s.state, '⚔️ 冲锋怪嘶吼着冲入了战场！（本回合即可行动）', 'l-impt');
-      ev(s, { type: 'buff', uid: p.uid });
-    }
-  }
+  await getEffect(defId).onDeploy(ctx, s, p);
   return p;
 }

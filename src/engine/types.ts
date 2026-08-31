@@ -1,7 +1,6 @@
 /* types.ts · Game/GameDeps 纯类型（UI 无副作用导入——只含类型 import，运行时零依赖） */
-import type { GameState, GameEvent, ChoiceResult, Chooser, Piece } from './state.ts';
+import type { GameState, GameEvent, ChoiceResult, Chooser, ChoiceSpec, Session, Piece } from './state.ts';
 import type { Cell } from './data.ts';
-import type { SkillInfo } from './abilities.ts';
 
 export interface GameDeps { choose?: Chooser }
 
@@ -29,4 +28,13 @@ export interface Game {
     effRange(p: Piece): number;
     bigCharge(p: Piece): number;
   };
+}
+
+export interface HandlerCtx { choose: Chooser }
+
+export interface SkillInfo {
+  label: string;
+  usable(p: Piece): boolean;
+  targetSpec(st: GameState, p: Piece): ChoiceSpec;
+  exec(ctx: HandlerCtx, s: Session, p: Piece, got: ChoiceResult): Promise<void>;
 }
