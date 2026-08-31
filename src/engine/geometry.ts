@@ -32,19 +32,10 @@ export function isFrontal(attacker: Piece, victim: Piece): boolean {
   return victim.owner === 0 ? attacker.y > victim.y : attacker.y < victim.y;
 }
 
-/** 是否为 23 号独行侠的禁入邻圈（对 owner 阵营而言）。Task 4 将由 effects.blocksAlly 取代并删除。 */
-export function inLonerZone(st: GameState, x: number, y: number, owner: Owner): boolean {
-  for (const q of st.pieces) {
-    if (q.dead || q.defId !== 23 || q.owner !== owner) continue;
-    if (mdist(x, y, q.x, q.y) <= 1) return true;
-  }
-  return false;
-}
-
 /** 通用可达空格 BFS（≤maxStep 步，途经不可穿子），含起点。
- *  isBlocked 为逐格禁止谓词（原 inLonerZone 检查）；缺省保持旧行为。 */
+ *  isBlocked 为逐格禁止谓词（如 effects.blocksAlly 的独行侠禁入圈）。 */
 export function bfsEmptyCells(state: GameState, p: Piece, maxStep: number,
-                              isBlocked?: (x: number, y: number) => boolean): Cell[] {
+                              isBlocked: (x: number, y: number) => boolean): Cell[] {
   const out: Cell[] = [{ x: p.x, y: p.y }];
   if (maxStep <= 0) return out;
   const occupied = new Set<string>();
@@ -62,7 +53,7 @@ export function bfsEmptyCells(state: GameState, p: Piece, maxStep: number,
         const key = nx + ',' + ny;
         if (!inBoard(nx, ny) || seen.has(key) || occupied.has(key)) continue;
         seen.add(key);
-        if (isBlocked ? isBlocked(nx, ny) : inLonerZone(state, nx, ny, p.owner)) continue;
+        if (isBlocked(nx, ny)) continue;
         next.push({ x: nx, y: ny });
         out.push({ x: nx, y: ny });
       }

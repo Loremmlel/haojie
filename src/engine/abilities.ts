@@ -13,6 +13,7 @@ import { PNAME, ev, pushLog, makePiece, pieceAt,
          type Session, type GameState, type Piece, type ChoiceSpec, type ChoiceResult } from './state.ts';
 import { inBoard, mdist, nearestDist, effRange, effAtk, bfsEmptyCells, attackTargets } from './rules.ts';
 import { dealDamage, killPiece, flushDeaths, performAttack } from './engine.ts';
+import { blocksAlly } from './effects.ts';
 import type { HandlerCtx, SkillInfo } from './types.ts';
 
 function foesOf(state: GameState, owner: number): Piece[] {
@@ -179,7 +180,7 @@ SKILLS[21] = {
     p.charge = 0;
     ev(s, { type: 'damage', uid: p.uid, amount: 10 });
     pushLog(s.state, `🌀 神行千里发动！扣除 10 血（${p.hp}/${p.maxHp}），请选择落点（≤6 格）。`, 'l-impt');
-    const cells = bfsEmptyCells(s.state, p, 6);
+    const cells = bfsEmptyCells(s.state, p, 6, (x, y) => blocksAlly(s.state, x, y, p.owner));
     const dest = (await ctx.choose({ kind: 'cell', cells, hint: '神行：选择落点（可原地不动）' })) as Cell;
     if (dest.x !== p.x || dest.y !== p.y) {
       ev(s, { type: 'move', uid: p.uid, tx: dest.x, ty: dest.y });
