@@ -5,31 +5,10 @@
  * ═══════════════════════════════════════════════════════════ */
 import { getDef, W, H, type Cell } from './data.ts';
 import { pieceAt, type GameState, type Owner, type Piece } from './state.ts';
+import { inBoard, pieceCells, nearestDist, bfsEmptyCells, DIRS, inLonerZone } from './geometry.ts';
 
-export const DIRS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-
-export function inBoard(x: number, y: number): boolean { return x >= 1 && x <= W && y >= 1 && y <= H; }
-export function mdist(ax: number, ay: number, bx: number, by: number): number {
-  return Math.abs(ax - bx) + Math.abs(ay - by);
-}
-
-/** 棋子占据的全部格子 */
-export function pieceCells(p: Piece): Cell[] {
-  if (!p.big) return [{ x: p.x, y: p.y }];
-  const c: Cell[] = [];
-  for (const dx of [0, 1]) for (const dy of [0, 1]) c.push({ x: p.x + dx, y: p.y + dy });
-  return c;
-}
-
-/** 两棋子间的最近格距（按各自占据格两两求最小） */
-export function nearestDist(a: Piece, b: Piece): number {
-  let best = Infinity;
-  for (const ca of pieceCells(a)) for (const cb of pieceCells(b)) {
-    const d = mdist(ca.x, ca.y, cb.x, cb.y);
-    if (d < best) best = d;
-  }
-  return best;
-}
+/** 保持外部（UI / 测试）既有 import 面零改动 */
+export { mdist, inBoard, pieceCells, nearestDist, bfsEmptyCells, DIRS, isFrontal, inLonerZone } from './geometry.ts';
 
 /** 刀魂（33 号）的 n：以其为中心 3×3 内随从数量（双方、含自身、实时计算） */
 export function bladeN(st: GameState, p: Piece): number {
@@ -56,44 +35,6 @@ export function effAtk(st: GameState, p: Piece): number {
   let a = p.defId === 33 ? bladeN(st, p) * 40 : p.atk;
   for (const b of p.atkBuffs) if (now < b.until) a += b.amt;
   return a;
-}
-
-/** 是否为 23 号独行侠的禁入邻圈（对 owner 阵营而言） */
-export function inLonerZone(st: GameState, x: number, y: number, owner: Owner): boolean {
-  for (const q of st.pieces) {
-    if (q.dead || q.defId !== 23 || q.owner !== owner) continue;
-    if (mdist(x, y, q.x, q.y) <= 1) return true;
-  }
-  return false;
-}
-
-/** 通用可达空格 BFS（≤maxStep 步，途经不可穿子，独行侠禁入圈对友方生效），含起点 */
-export function bfsEmptyCells(state: GameState, p: Piece, maxStep: number): Cell[] {
-  const out: Cell[] = [{ x: p.x, y: p.y }];
-  if (maxStep <= 0) return out;
-  const occupied = new Set<string>();
-  for (const q of state.pieces) {
-    if (q.dead || q.uid === p.uid) continue;
-    for (const c of pieceCells(q)) occupied.add(c.x + ',' + c.y);
-  }
-  const seen = new Set<string>([p.x + ',' + p.y]);
-  let frontier: Cell[] = [{ x: p.x, y: p.y }];
-  for (let step = 0; step < maxStep; step++) {
-    const next: Cell[] = [];
-    for (const cur of frontier) {
-      for (const [dx, dy] of DIRS) {
-        const nx = cur.x + dx, ny = cur.y + dy;
-        const key = nx + ',' + ny;
-        if (!inBoard(nx, ny) || seen.has(key) || occupied.has(key)) continue;
-        seen.add(key);
-        if (inLonerZone(state, nx, ny, p.owner)) continue;
-        next.push({ x: nx, y: ny });
-        out.push({ x: nx, y: ny });
-      }
-    }
-    frontier = next;
-  }
-  return out;
 }
 
 /* ─────────── 部署 ─────────── */
@@ -286,10 +227,4 @@ export function healTargets(state: GameState, p: Piece): Piece[] {
   return state.pieces.filter((q) =>
     !q.dead && q.owner === p.owner && q.hp < q.maxHp &&
     nearestDist(p, q) <= effRange(state, p));
-}
-
-/** 24 号厚脸皮：来自正面的伤害至多 10。正面 = 攻击者位于受害者朝前线一侧。 */
-export function isFrontal(attacker: Piece, victim: Piece): boolean {
-  // victim 的基地在 y=1(owner0) / y=13(owner1)；从前线方向（远离基地一侧）袭来为正面
-  return victim.owner === 0 ? attacker.y > victim.y : attacker.y < victim.y;
 }
