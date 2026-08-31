@@ -8,7 +8,8 @@ import { PNAME, ev, snap, undo, canUndo, pushLog, makePiece, newGame,
 import { effActions, effRange, moveTargets, attackTargets, healTargets,
          deployCells, canDeployAt, nearestDist, computeExtraRows } from './rules.ts';
 import { dealDamage, killPiece, heal, flushDeaths, checkWin, deployPiece, performAttack } from './engine.ts';
-import { SKILLS, type HandlerCtx } from './abilities.ts';
+import { SKILLS } from './abilities.ts';
+import type { HandlerCtx } from './types.ts';
 import { SPELL_TARGETS, CAST } from './spells.ts';
 import type { Game, GameDeps } from './types.ts';
 

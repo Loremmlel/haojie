@@ -10,18 +10,10 @@
 
 import { getDef, W, H, type Cell } from './data.ts';
 import { PNAME, ev, pushLog, makePiece, pieceAt,
-         type Session, type GameState, type Piece, type ChoiceSpec, type ChoiceResult, type Chooser } from './state.ts';
+         type Session, type GameState, type Piece, type ChoiceSpec, type ChoiceResult } from './state.ts';
 import { inBoard, mdist, nearestDist, effRange, effAtk, bfsEmptyCells, attackTargets } from './rules.ts';
 import { dealDamage, killPiece, flushDeaths, performAttack } from './engine.ts';
-
-export interface HandlerCtx { choose: Chooser }
-
-export interface SkillInfo {
-  label: string;
-  usable(p: Piece): boolean;
-  targetSpec(st: GameState, p: Piece): ChoiceSpec;
-  exec(ctx: HandlerCtx, s: Session, p: Piece, got: ChoiceResult): Promise<void>;
-}
+import type { HandlerCtx, SkillInfo } from './types.ts';
 
 function foesOf(state: GameState, owner: number): Piece[] {
   return state.pieces.filter((q) => !q.dead && q.owner !== owner);

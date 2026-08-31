@@ -9,7 +9,7 @@ import { PNAME, ev, pushLog, pieceAt,
 import { deployCells } from './rules.ts';
 import { dealDamage, killPiece, flushDeaths, deployPiece } from './engine.ts';
 import { rnd, rndInt } from './rng.ts';
-import type { HandlerCtx } from './abilities.ts';
+import type { HandlerCtx } from './types.ts';
 
 /** 己方随从（不含基地）——v1 与 abilities.js 共享作用域，ESM 下 spells.ts 各自持有同构副本 */
 function myFollowers(state: GameState, owner: number): Piece[] {

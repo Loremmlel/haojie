@@ -10,7 +10,8 @@ import { rnd } from './rng.ts';
 import { PNAME, ev, pushLog, makePiece, pieceByUid,
          type Session, type GameState, type Piece, type Owner } from './state.ts';
 import { effAtk, effRange, effActions, isFrontal, nearestDist } from './rules.ts';
-import { DEATHRATTLES, type HandlerCtx } from './abilities.ts';
+import { DEATHRATTLES } from './abilities.ts';
+import type { HandlerCtx } from './types.ts';
 
 /**
  * 对目标造成伤害。
