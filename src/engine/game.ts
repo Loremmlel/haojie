@@ -6,9 +6,9 @@ import { PNAME, ev, snap, undo, canUndo, pushLog, makePiece, newGame,
          type Session, type GameEvent, type ChoiceResult, type Chooser,
          type GameState, type Piece, type Card, type StoredCard, type Owner } from './state.ts';
 import { effActions, effRange, moveTargets, attackTargets, healTargets,
-         deployCells, canDeployAt, nearestDist, computeExtraRows } from './rules.ts';
-import { dealDamage, killPiece, heal, flushDeaths, checkWin, deployPiece, performAttack } from './engine.ts';
-import { SKILLS } from './abilities.ts';
+         deployCells, canDeployAt, computeExtraRows } from './rules.ts';
+import { killPiece, flushDeaths, checkWin, deployPiece, performAttack } from './engine.ts';
+import { getEffect, resolveDrawDefId } from './effects.ts';
 import type { HandlerCtx } from './types.ts';
 import { SPELL_TARGETS, CAST } from './spells.ts';
 import type { Game, GameDeps } from './types.ts';
@@ -23,8 +23,7 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game> {
   /** 抽牌（名刀抽到时立即进行形态判定，手牌中直接呈现最终形态） */
   const drawCards = (state: GameState, owner: Owner, n: number): void => {
     for (let i = 0; i < n; i++) {
-      let defId = rndInt(state, 1, 26);
-      if (defId === 3 && rnd(state) >= 1 / 3) defId = 33;
+      const defId = resolveDrawDefId(state, rndInt(state, 1, 26));
       state.hand[owner].push({ uid: ++state.uidSeq, defId });
       const def = getDef(defId);
       pushLog(state, `${PNAME[owner]}召唤了【${def.name}】${def.emoji}${def.type === 'spell' ? '（法术）' : ''}`);
@@ -64,7 +63,7 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game> {
     for (const p of sess.state.pieces) {
       if (p.dead || p.owner !== me) continue;
       p.justDeployed = false;
-      if (p.defId === 23) p.beatCount++;
+      await getEffect(p.defId).onTurnStart(ctx, sess, p);
       p.apLeft = effActions(sess.state, p);
       p.hitThisTurn = [];
     }
@@ -170,26 +169,7 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game> {
     if (!p || p.owner !== sess.state.curPlayer || sess.state.phase !== 'action') return false;
     if (p.justDeployed || p.apLeft <= 0) return false;
 
-    // 大肉比：先蓄势再平移
-    if (p.defId === 5) {
-      if (p.charge <= 0) {
-        snap(sess);
-        p.charge = 1;
-        p.apLeft--;
-        ev(sess, { type: 'buff', uid: p.uid });
-        pushLog(sess.state, '🐘 大肉比深深蓄势……下次选择移动才会真正挪动！');
-        return true;
-      }
-      const legal = moveTargets(sess.state, p).some((c) => c.x === x && c.y === y);
-      if (!legal) return false;
-      snap(sess);
-      p.charge = 0;
-      ev(sess, { type: 'move', uid: p.uid, tx: x, ty: y });
-      p.x = x; p.y = y;
-      p.apLeft--;
-      pushLog(sess.state, `🐘 大肉比轰隆隆地挪到了 (${x},${y})！`);
-      return true;
-    }
+    if (await getEffect(p.defId).onMoveCommand(ctx, sess, p, x, y)) return true;
 
     const legal = moveTargets(sess.state, p).some((c) => c.x === x && c.y === y);
     if (!legal) return false;
@@ -206,16 +186,8 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game> {
     if (!p || !t || p.owner !== sess.state.curPlayer || sess.state.phase !== 'action') return false;
     if (p.justDeployed || p.apLeft <= 0) return false;
 
-    // 奶妈：可指定己方残血棋子改为治疗
-    if (p.defId === 2 && t.owner === p.owner) {
-      if (t.hp >= t.maxHp) return false;
-      if (nearestDist(p, t) > p.range) return false;
-      snap(sess);
-      p.apLeft--;
-      pushLog(sess.state, `💉 奶妈为【${getDef(t.defId).name}】回复了 20 血量。`);
-      ev(sess, { type: 'attack', uid: p.uid, tuid: t.uid, healMode: true });
-      await heal(sess, t, 20);
-      return true;
+    if (t.owner === p.owner) {
+      return await getEffect(p.defId).onAttackSelected(ctx, sess, p, t);
     }
 
     if (!attackTargets(sess.state, p).includes(t)) return false;
@@ -227,19 +199,19 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game> {
 
   const useSkill = async (uid: number): Promise<boolean> => {
     const p = pieceByUid(sess.state, uid);
-    if (!p) return false; // 无效/已死亡 uid 与其余行动方法一致返回 false（PR 评论 3）
-    const sk = SKILLS[p.defId];
-    if (!sk || p.owner !== sess.state.curPlayer || sess.state.phase !== 'action') return false;
-    if (p.justDeployed || p.apLeft <= 0 || !sk.usable(p)) return false;
-    const spec = sk.targetSpec(sess.state, p);
+    if (!p) return false;
+    const eff = getEffect(p.defId);
+    if (!eff.skillLabel || p.owner !== sess.state.curPlayer || sess.state.phase !== 'action') return false;
+    if (p.justDeployed || p.apLeft <= 0 || !(eff.skillUsable?.(p) ?? true)) return false;
+    const spec = eff.skillTargetSpec!(sess.state, p);
     let got: ChoiceResult = null;
     if (spec.kind !== 'none') {
       got = await ctx.choose(spec);
-      if (got == null) return false; // 玩家取消了
+      if (got == null) return false;
     }
     snap(sess);
     p.apLeft--;
-    await sk.exec(ctx, sess, p, got);
+    await eff.skillExec!(ctx, sess, p, got);
     await flushDeaths(ctx, sess);
     const w = checkWin(sess.state);
     if (w != null) ev(sess, { type: 'win', winner: w });
@@ -275,7 +247,10 @@ export async function createGame(seed: number, deps?: GameDeps): Promise<Game> {
       attackTargets: (p: Piece) => attackTargets(sess.state, p),
       healTargets: (p: Piece) => healTargets(sess.state, p),
       deployCells: (defId: number, owner: number) => deployCells(sess.state, defId, owner as Owner),
-      skillInfo: (p: Piece) => SKILLS[p.defId] ?? null,
+      skillInfo: (p: Piece) => {
+        const e = getEffect(p.defId);
+        return e.skillLabel ? { label: e.skillLabel, usable: e.skillUsable!, targetSpec: e.skillTargetSpec!, exec: e.skillExec! } : null;
+      },
       effActions: (p: Piece) => effActions(sess.state, p),
       effRange: (p: Piece) => effRange(sess.state, p),
       bigCharge: (p: Piece) => p.charge,
