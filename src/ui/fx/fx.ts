@@ -82,7 +82,8 @@ function transient(run: FxRun, el: HTMLElement, controls: FxControls): void {
  *  永不结算（实测）；以同量级 sleep 兜底——真实浏览器总是动画先完成，兜底即弃。 */
 function settle(run: FxRun, controls: FxControls, ms: number): Promise<void> {
   const finished: Promise<void> = Promise.resolve(track(run, controls)).then(
-    () => {}, () => {},
+    () => {},
+    (err) => { if (run.alive) console.error('fx settle error', err); }, // 真实动画失败可见（headless 兜底赢时此支恒不触发）
   );
   return Promise.race([finished, sleep(ms)]);
 }
@@ -111,15 +112,21 @@ export function initFx(c: FxCtx): void {
  *  暂挂窗：死亡事件由 fn 同步入列（早于 React 对 busy/dead 的批量渲染），
  *  playChain 消费后才过游标——链首到链尾全程命中，链尾之后（含任意后续 busy 链，
  *  旧 !p.dead || ia.busy 过滤会在每条后续链开头把 0HP 尸体重新挂载）不再命中。 */
-export function isDying(g: Game, uid: number): boolean {
-  // undo 截断 events 而模块级 evCursor 保持高位（仅 initFx/playChain 的 > 防御重写，且后者
-  // 落在链尾）——新链的死亡事件回填 index 0..N 时，照 [evCursor…length) 扫描是空集，尸体会在
-  // 死亡 FX 前被卸载；clamp 回 0 与 playChain 的 > 防御同语义（越界即视为从 0 重扫）。
-  for (let i = (evCursor > g.events.length ? 0 : evCursor); i < g.events.length; i++) {
-    const e = g.events[i];
+/** 纯扫描：events[cursor…length) 是否存在 uid 的未消费死亡事件（零 DOM/模块态依赖，
+ *  导出供 node 单元测试直测）。游标越界（undo 截断 events 而模块级 evCursor 保持高位
+ *  ——仅 initFx/playChain 的 > 防御重写，且后者落在链尾）时 clamp 回 0 重扫，与 playChain
+ *  的 > 防御同语义（越界即视为从 0 重扫）：否则新链的死亡事件回填 index 0..N 时，照
+ *  [evCursor…length) 扫描是空集，尸体会在死亡 FX 前被卸载。 */
+export function deathPending(events: readonly GameEvent[], cursor: number, uid: number): boolean {
+  for (let i = (cursor > events.length ? 0 : cursor); i < events.length; i++) {
+    const e = events[i];
     if (e.type === 'death' && e.uid === uid) return true;
   }
   return false;
+}
+
+export function isDying(g: Game, uid: number): boolean {
+  return deathPending(g.events, evCursor, uid);
 }
 
 let evCursor = 0;         // 已播放游标（undo 清空 events 后经 > 防御重置）
@@ -186,16 +193,18 @@ async function lunge(run: FxRun, pEl: HTMLElement, tEl: HTMLElement) {
     } else {
       await sleep(rm ? 40 : 120);
     }
-    // 斩击线（transient Motion：与旧 keyframes slashGo 等值——scaleX 0→1、opacity 渐隐，角度恒常）
-    const ang = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-    const slash = addEl(run, 'slash', {
-      left: (pr.left - b.left + pr.width / 2 + dx * 0.25 - 26) + 'px',
-      top: (pr.top - b.top + pr.height / 2 + dy * 0.25 - 2) + 'px',
-      width: '52px',
-    });
-    const kf = { scaleX: [0, 1], rotate: [ang + 'deg', ang + 'deg'], opacity: [0, 1, 0.1] };
-    const opts = { duration: rm ? 0.05 : 0.26, ease: 'easeOut' as const };
-    transient(run, slash, animate(slash, kf, opts)); // slash 为 transient（非阻塞），无必要尾等
+    if (run.alive) {
+      // 斩击线（transient Motion：与旧 keyframes slashGo 等值——scaleX 0→1、opacity 渐隐，角度恒常）
+      const ang = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+      const slash = addEl(run, 'slash', {
+        left: (pr.left - b.left + pr.width / 2 + dx * 0.25 - 26) + 'px',
+        top: (pr.top - b.top + pr.height / 2 + dy * 0.25 - 2) + 'px',
+        width: '52px',
+      });
+      const kf = { scaleX: [0, 1], rotate: [ang + 'deg', ang + 'deg'], opacity: [0, 1, 0.1] };
+      const opts = { duration: rm ? 0.05 : 0.26, ease: 'easeOut' as const };
+      transient(run, slash, animate(slash, kf, opts)); // slash 为 transient（非阻塞），无必要尾等
+    }
   } finally {
     pEl.style.zIndex = ''; // finally 恒恢复：即便 body 分支异常/取消也不残留提升层
   }

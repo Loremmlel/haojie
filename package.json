@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/verify-singlefile.mjs",
-    "test": "node --experimental-strip-types --test tests/engine.test.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

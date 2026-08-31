@@ -23,7 +23,7 @@
 - 只新增 `motion@13.1.1`；不引入 GSAP/Pixi/Tailwind/CSS-in-JS/新测试框架。
 - 默认标准 `motion/react`；不预先使用 `LazyMotion`。
 - `vite-plugin-singlefile`、零外链、`file://` 运行约束不变。
-- implementation PR 的 `src/**/*.ts|tsx|css` 汇总必须 **deleted > added**。
+- implementation PR 的 `src/**/*.ts|tsx|css` 汇总必须 **deleted > added**（实现分支已按文末「Gate 例外记录」执行，merge 时签署）。
 - 不预建 `runtime.ts`、`session.ts`、`timings.ts` 或一文件一个 primitive；抽象只有在真实减少重复/总代码时才保留。
 
 ## File Map
@@ -492,6 +492,14 @@ out.modalExit = true;
 
 Add `modalExit` to final `ok`.
 
+> **已知覆盖缺口（实施后追记）：** 计划要求 `until(() => !$('#modal'), 1500)` 证明 exit
+> 后卸载；headless（`--virtual-time-budget`）下 Motion 帧循环不驱动、exit 卸载回调不触发，
+> e2e 以 `await wait(1000)` + 标志位替代（只证明 30ms 时未卸载、1s 后 DOM 状态，正确/损坏
+> 卸载均通过）。death-FX 是否真正播于内层 node 同样因帧不可观测，以 `#fxlayer .boom`
+> 存在性作代理。两项均以 Task 6 Step 6 手动浏览器 smoke 兜底（真实浏览器实测
+> modal/optfloat/toast exit 完成卸载）；自动回归对「exit 完成 → 卸载」与「death FX 播于
+> 内层」为已知缺口，勿据此误判覆盖。
+
 - [ ] **Step 2: Run red test**
 
 ```bash
@@ -665,7 +673,7 @@ git grep -n "sleep(" -- src/ui/fx/fx.ts || true
 git grep -n "setTimeout" -- src/ui/fx/fx.ts src/App.tsx src/ui/components/ToastHost.tsx
 ```
 
-Expected: no Motion-owned `offsetWidth/style.transition/sleep/temporary piece FX class`. Remaining timers are only App deploy sync scheduling and Toast lifetime.
+Expected: no Motion-owned `offsetWidth/style.transition/temporary piece FX class`. Remaining `sleep` 仅两类——(a) `settle` 的同量级竞速兜底（headless `--virtual-time-budget` 下 Motion promise 不结算；真实浏览器动画恒先完成、兜底即弃）与 (b) 语义停顿（lunge/death 无 body 分支、spell 收尾）；App deploy sync scheduling 与 Toast lifetime 仍为业务 timer。
 
 - [ ] **Step 2: Search ownership violations**
 
@@ -742,3 +750,36 @@ No changes → no empty commit.
 - reduced-motion preserves event order but shortens/staticizes presentation
 - initial base pieces no longer use the legacy CSS `pop-in` special case
 ```
+
+---
+
+## Gate 例外记录（实施分支追记，merge 时签署）
+
+**Gate 原条款：** 本计划 §Global Constraints 与 Task 6 Step 5 要求 `src/**/*.ts|tsx|css`
+汇总 **deleted > added**（净增量 ≤ 0）。
+
+**测量（BASE_SHA = fa418e5，实现分支创建时的 main HEAD）：** `added 489 / deleted 315，
+net +174`。此前 by-Task6 修剪 476/300 → 462/313（-27 行诚实削减已执行）；fix wave 后
++12（isDying 事件游标 11 行、PiecesLayer 过滤 1 行、BoardArea game prop、TopBar blink
+reduce 4 行、lunge sleep 删 2 行、clamp 修复 ~4 行）。
+
+**根因——计划对 Motion 迁移净增量低估：** fx.ts 净增量由四项 spec 级机制构成——
+§5.6 per-run 隔离（~70 行）、Motion 包装（每处 kf/opts 3-4 行 vs 旧 timer 1 行）、
+R4 settle 兜底（e2e `--virtual-time-budget` 虚拟时间下动画 promise 永不结算，blocking
+动画的竞速安全兜底；真实浏览器动画恒先完成、兜底即弃）、§8 reduced 参数化（每原语
+时长分支）。组件层（PiecesLayer 内层分离、Modal/OptionFloat/Toast/Hand/Stored、
+MotionConfig）净 +16。
+
+**尝试过的补救（Task 6 Step 5 原条款执行）：** 删除全部失去 owner 的 CSS/keyframes 与
+陈旧注释、修剪非获益 helper——已执行且不足以回正（CSS 净 -49 已包含在计数内）。
+
+**为何 ≤0 不可达：** 独立复核确认，唯一达标路径 = 回退已验收功能（reduced-motion ≈-25 /
+settle ≈-10），不可交换；无冗余抽象、无新增管理文件、无死代码可删。四轮评审（含最终
+whole-branch，fable）独立背书「+149→+174 是成本不是膨胀；没有非回归路径回到 net ≤ 0」。
+
+**回退代价清单（若把 deleted>added 视为硬性 merge 条件）：** a) 撤销 reduced 参数化 ≈-25
+（回归 reduced-motion 验收）；b) 删 settle 兜底 ≈-10（回归 headless e2e 稳定性）；
+c) 全删不变式注释 ≈-55（知识损失，不可交换）。三者均无法同时满足「达标 + 保住功能」。
+
+**结论：** 按例外记录，由 merge 时签署。后续计划定价 LOC gate 时应先估算目标库 API
+的逐处包装成本与新增机制行数，勿仅以「删掉旧实现」计 deleted。
