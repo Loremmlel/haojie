@@ -28,6 +28,7 @@ export function nearestDist(a: Piece, b: Piece): number {
 }
 
 /** 24 号厚脸皮：来自正面的伤害至多 10。正面 = 攻击者位于受害者朝前线一侧。 */
+// victim 的基地在 y=1(owner0) / y=13(owner1)；从前线方向（远离基地一侧）袭来为正面
 export function isFrontal(attacker: Piece, victim: Piece): boolean {
   return victim.owner === 0 ? attacker.y > victim.y : attacker.y < victim.y;
 }

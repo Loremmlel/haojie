@@ -1,7 +1,7 @@
 /* game.ts · createGame 会话工厂（对外 API 门面） */
 import { rnd, rndInt } from './rng.ts';
-import { getDef, W, H, type Cell } from './data.ts';
-import { PNAME, ev, snap, undo, canUndo, pushLog, makePiece, newGame,
+import { getDef } from './data.ts';
+import { PNAME, ev, snap, undo, canUndo, pushLog, newGame,
          pieceAt, pieceByUid,
          type Session, type GameEvent, type ChoiceResult, type Chooser,
          type GameState, type Piece, type Card, type StoredCard, type Owner } from './state.ts';
@@ -9,9 +9,8 @@ import { effActions, effRange, moveTargets, attackTargets, healTargets,
          deployCells, canDeployAt, computeExtraRows } from './rules.ts';
 import { killPiece, flushDeaths, checkWin, deployPiece, performAttack } from './engine.ts';
 import { getEffect, resolveDrawDefId } from './effects.ts';
-import type { HandlerCtx } from './types.ts';
+import type { HandlerCtx, Game, GameDeps } from './types.ts';
 import { SPELL_TARGETS, CAST } from './spells.ts';
-import type { Game, GameDeps } from './types.ts';
 
 const rejectChooser: Chooser = (spec) =>
   Promise.reject(new Error(`未注入目标选择器却发起了 ${spec.kind} 选择——请通过 createGame(seed, { choose }) 注入`));
