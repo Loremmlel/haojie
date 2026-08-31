@@ -112,7 +112,10 @@ export function initFx(c: FxCtx): void {
  *  playChain 消费后才过游标——链首到链尾全程命中，链尾之后（含任意后续 busy 链，
  *  旧 !p.dead || ia.busy 过滤会在每条后续链开头把 0HP 尸体重新挂载）不再命中。 */
 export function isDying(g: Game, uid: number): boolean {
-  for (let i = evCursor; i < g.events.length; i++) {
+  // undo 截断 events 而模块级 evCursor 保持高位（仅 initFx/playChain 的 > 防御重写，且后者
+  // 落在链尾）——新链的死亡事件回填 index 0..N 时，照 [evCursor…length) 扫描是空集，尸体会在
+  // 死亡 FX 前被卸载；clamp 回 0 与 playChain 的 > 防御同语义（越界即视为从 0 重扫）。
+  for (let i = (evCursor > g.events.length ? 0 : evCursor); i < g.events.length; i++) {
     const e = g.events[i];
     if (e.type === 'death' && e.uid === uid) return true;
   }
